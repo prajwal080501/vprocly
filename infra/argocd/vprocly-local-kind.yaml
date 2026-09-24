@@ -1,0 +1,26 @@
+# Argo CD Application for the local kind cluster: syncs infra/helm/vprocly from main with the kind values.
+# Prerequisites (not in git): the vprocly-secrets Secret and the repo deploy-key Secret; see infra/kind/README.md.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vprocly-local-kind
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:prajwal080501/vprocly.git
+    targetRevision: main
+    path: infra/helm/vprocly
+    helm:
+      releaseName: vprocly
+      valueFiles: [values-local-kind.yaml]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vprocly
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [ServerSideApply=true]
+    retry:
+      limit: 5
+      backoff: { duration: 10s, factor: 2, maxDuration: 3m }
