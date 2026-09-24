@@ -16,6 +16,7 @@ const config = loadConfig();
 const pool = createPool(config.DATABASE_URL, 5);
 const db = createDatabase(pool);
 const storage = new ObjectStorage(config);
+await storage.ensureBuckets();
 
 const nc = await connect({ servers: config.NATS_URL, name: 'vprocly-worker' });
 const js = jetstream(nc);

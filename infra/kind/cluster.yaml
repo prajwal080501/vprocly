@@ -1,0 +1,11 @@
+# Local Kubernetes for exercising the Helm chart and Argo CD. Backing services (Postgres, Keycloak, NATS,
+# S3, ClamAV, Temporal) come from infra/compose, reached via host.docker.internal, like managed services in SaaS.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: vprocly
+nodes:
+  - role: control-plane
+    labels:
+      ingress-ready: "true"
+    extraPortMappings:
+      - { containerPort: 80, hostPort: 58090, protocol: TCP }

@@ -5,6 +5,8 @@ const Env = z.object({
   DATABASE_URL: z.string().url(),
   OIDC_ISSUER: z.string().url(),
   OIDC_AUDIENCE: z.string().default('vprocly-api'),
+  /** Where to fetch signing keys when the issuer URL is not reachable from here (e.g. inside a cluster). */
+  OIDC_JWKS_URI: z.string().url().optional(),
   S3_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().default('us-east-1'),
   S3_ACCESS_KEY: z.string(),

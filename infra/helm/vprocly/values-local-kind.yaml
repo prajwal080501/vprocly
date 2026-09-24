@@ -1,0 +1,31 @@
+# Local kind cluster (infra/kind). Backing services run in infra/compose and are reached through
+# host.docker.internal, the same way a SaaS cluster reaches managed Postgres, S3, IdP, NATS and Temporal.
+# Images are loaded into kind with `kind load docker-image` (see infra/kind/README.md).
+image:
+  registry: vprocly
+  tag: local
+  pullPolicy: IfNotPresent
+
+config:
+  publicUrl: http://localhost:58090
+  oidcIssuer: http://localhost:58080/realms/vprocly
+  oidcInternalIssuer: http://host.docker.internal:58080/realms/vprocly
+  oidcJwksUri: http://host.docker.internal:58080/realms/vprocly/protocol/openid-connect/certs
+  s3Endpoint: http://host.docker.internal:58333
+  s3Region: us-east-1
+  natsUrl: nats://host.docker.internal:54222
+  clamavHost: host.docker.internal
+  clamavPort: 53310
+  temporalAddress: host.docker.internal:57233
+
+existingSecret: vprocly-secrets
+
+api: { replicas: 1, resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { memory: 768Mi } } }
+web: { replicas: 1, resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { memory: 512Mi } } }
+worker: { replicas: 1, resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { memory: 768Mi } } }
+excel: { replicas: 1, resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { memory: 1Gi } } }
+
+ingress:
+  enabled: true
+  className: traefik
+  host: localhost

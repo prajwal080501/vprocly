@@ -4,7 +4,7 @@ import { HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import type { EventEnvelope } from '@vprocly/contracts';
 import { auditLog, createDatabase, createPool, documents, outbox, withTenant } from '@vprocly/db';
 import { and, eq } from 'drizzle-orm';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ClamAv, parseScanReply } from '../src/clamav.js';
 import { loadConfig } from '../src/config.js';
 import { handleEvent } from '../src/consumer.js';
@@ -29,6 +29,10 @@ const scanner = documentScanner({ db, storage, clamav });
 
 // The standard EICAR test file, assembled at runtime so the repository itself never contains the signature.
 const EICAR = ['X5O!P%@AP[4\\PZX54(P^)7CC)7}$', 'EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'].join('');
+
+beforeAll(async () => {
+  await storage.ensureBuckets();
+});
 
 afterAll(async () => {
   await pool.end();

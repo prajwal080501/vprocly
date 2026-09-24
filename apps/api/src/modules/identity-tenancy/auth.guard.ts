@@ -36,7 +36,9 @@ export class AuthGuard implements CanActivate {
     private readonly tenantDb: TenantDb,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {
-    this.jwks = createRemoteJWKSet(new URL(`${config.OIDC_ISSUER}/protocol/openid-connect/certs`));
+    this.jwks = createRemoteJWKSet(
+      new URL(config.OIDC_JWKS_URI ?? `${config.OIDC_ISSUER}/protocol/openid-connect/certs`),
+    );
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

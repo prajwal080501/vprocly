@@ -3,9 +3,12 @@ import type { JWT } from 'next-auth/jwt';
 import KeycloakProvider from 'next-auth/providers/keycloak';
 
 const issuer = process.env.OIDC_ISSUER!;
+// Server-side calls (discovery, token exchange, refresh) may need an internal URL; the browser and the
+// token's `iss` always use the public issuer.
+const internalIssuer = process.env.OIDC_INTERNAL_ISSUER ?? issuer;
 
 async function refresh(token: JWT): Promise<JWT> {
-  const res = await fetch(`${issuer}/protocol/openid-connect/token`, {
+  const res = await fetch(`${internalIssuer}/protocol/openid-connect/token`, {
     method: 'POST',
     body: new URLSearchParams({
       grant_type: 'refresh_token',
@@ -29,6 +32,7 @@ export const authOptions: NextAuthOptions = {
   providers: [
     KeycloakProvider({
       issuer,
+      wellKnown: `${internalIssuer}/.well-known/openid-configuration`,
       clientId: process.env.OIDC_CLIENT_ID!,
       clientSecret: process.env.OIDC_CLIENT_SECRET!,
     }),

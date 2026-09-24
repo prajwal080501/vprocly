@@ -13,6 +13,9 @@ config:
   oidcIssuer: https://id.example.com/realms/vprocly
   oidcAudience: vprocly-api
   oidcClientId: vprocly-web
+  # Optional internal URLs when the public issuer is not reachable from inside the cluster.
+  oidcInternalIssuer: ""
+  oidcJwksUri: ""
   s3Endpoint: ""                               # empty = AWS S3; set for SeaweedFS/MinIO/Ceph
   s3Region: ap-south-1
   s3BucketDocuments: vprocly-documents
@@ -47,7 +50,7 @@ excel:
 
 ingress:
   enabled: true
-  className: nginx
+  className: traefik
   host: app.example.com
   tlsSecretName: ""
   annotations: {}

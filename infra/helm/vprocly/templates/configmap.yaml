@@ -8,7 +8,15 @@ data:
   OIDC_ISSUER: {{ .Values.config.oidcIssuer | quote }}
   OIDC_AUDIENCE: {{ .Values.config.oidcAudience | quote }}
   OIDC_CLIENT_ID: {{ .Values.config.oidcClientId | quote }}
-  S3_ENDPOINT: {{ .Values.config.s3Endpoint | quote }}
+  {{- with .Values.config.oidcInternalIssuer }}
+  OIDC_INTERNAL_ISSUER: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.oidcJwksUri }}
+  OIDC_JWKS_URI: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.s3Endpoint }}
+  S3_ENDPOINT: {{ . | quote }}
+  {{- end }}
   S3_REGION: {{ .Values.config.s3Region | quote }}
   S3_BUCKET_DOCUMENTS: {{ .Values.config.s3BucketDocuments | quote }}
   S3_BUCKET_QUARANTINE: {{ .Values.config.s3BucketQuarantine | quote }}

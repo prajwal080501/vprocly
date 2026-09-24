@@ -1,5 +1,12 @@
 import type { Readable } from 'node:stream';
-import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  CopyObjectCommand,
+  CreateBucketCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import type { WorkerConfig } from './config.js';
 
 export class ObjectStorage {
@@ -18,6 +25,23 @@ export class ObjectStorage {
 
   get buckets() {
     return { documents: this.config.S3_BUCKET_DOCUMENTS, quarantine: this.config.S3_BUCKET_QUARANTINE };
+  }
+
+  /** The worker must not depend on the API having started first (some S3 stores return InternalError, not NoSuchBucket). */
+  async ensureBuckets(): Promise<void> {
+    for (const bucket of Object.values(this.buckets)) {
+      try {
+        await this.client.send(new HeadBucketCommand({ Bucket: bucket }));
+      } catch {
+        try {
+          await this.client.send(new CreateBucketCommand({ Bucket: bucket }));
+        } catch (err) {
+          // Another process may have created it concurrently.
+          const name = (err as Error).name;
+          if (name !== 'BucketAlreadyOwnedByYou' && name !== 'BucketAlreadyExists') throw err;
+        }
+      }
+    }
   }
 
   async stream(bucket: string, key: string): Promise<Readable> {
