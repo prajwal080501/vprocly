@@ -1,0 +1,43 @@
+{
+  "name": "@vprocly/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput & node --watch --env-file-if-exists=.env dist/main.js",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1138.0",
+    "@aws-sdk/s3-request-presigner": "^3.1138.0",
+    "@nestjs/common": "^12.1.0",
+    "@nestjs/core": "^12.1.0",
+    "@nestjs/platform-express": "^12.1.0",
+    "@nestjs/swagger": "^12.0.2",
+    "@vprocly/contracts": "workspace:*",
+    "@vprocly/db": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "jose": "^6.2.12",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^12.1.0",
+    "@swc/core": "^1.16.2",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.2",
+    "@types/supertest": "^7.2.1",
+    "@vprocly/config": "workspace:*",
+    "eslint": "^10.11.0",
+    "supertest": "^7.3.0",
+    "typescript": "~6.0.0",
+    "typescript-eslint": "^8.70.1",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "^5.0.1"
+  }
+}

@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vprocly.fullname" . }}-config
+  labels: {{- include "vprocly.labels" . | nindent 4 }}
+data:
+  PORT: "4000"
+  OIDC_ISSUER: {{ .Values.config.oidcIssuer | quote }}
+  OIDC_AUDIENCE: {{ .Values.config.oidcAudience | quote }}
+  OIDC_CLIENT_ID: {{ .Values.config.oidcClientId | quote }}
+  S3_ENDPOINT: {{ .Values.config.s3Endpoint | quote }}
+  S3_REGION: {{ .Values.config.s3Region | quote }}
+  S3_BUCKET_DOCUMENTS: {{ .Values.config.s3BucketDocuments | quote }}
+  S3_BUCKET_QUARANTINE: {{ .Values.config.s3BucketQuarantine | quote }}
+  NATS_URL: {{ .Values.config.natsUrl | quote }}
+  CLAMAV_HOST: {{ .Values.config.clamavHost | quote }}
+  CLAMAV_PORT: {{ .Values.config.clamavPort | quote }}
+  TEMPORAL_ADDRESS: {{ .Values.config.temporalAddress | quote }}
+  TEMPORAL_NAMESPACE: {{ .Values.config.temporalNamespace | quote }}
+  TEMPORAL_TASK_QUEUE: {{ .Values.config.temporalTaskQueue | quote }}
+  UPLOAD_DEADLINE_SECONDS: {{ .Values.config.uploadDeadlineSeconds | quote }}
+  CORS_ORIGIN: {{ .Values.config.publicUrl | quote }}
+  NEXTAUTH_URL: {{ .Values.config.publicUrl | quote }}
+  API_URL: "http://{{ include "vprocly.fullname" . }}-api:4000/api"
+  EXCEL_SERVICE_URL: "http://{{ include "vprocly.fullname" . }}-excel:8001"

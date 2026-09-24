@@ -1,0 +1,6 @@
+apiVersion: v2
+name: vprocly
+description: vProcly procurement, finance control and ExceptionOS. One chart for hosted SaaS and on-prem installs.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

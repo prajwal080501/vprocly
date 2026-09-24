@@ -1,0 +1,38 @@
+{
+  "name": "@vprocly/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate": "drizzle-kit generate",
+    "migrate": "node --experimental-strip-types src/migrate.ts",
+    "test": "vitest run",
+    "seed:dev": "node --experimental-strip-types src/seed-dev.ts",
+    "migrate:prod": "node dist/migrate.js"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.3",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "@vprocly/config": "workspace:*",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "~6.0.0",
+    "vitest": "^5.0.1"
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ]
+}

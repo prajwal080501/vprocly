@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - name: Start dev stack
+        run: docker compose -f infra/compose/docker-compose.yml up -d postgres keycloak nats s3 temporal clamav
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Wait for Keycloak, Temporal and ClamAV (signature download takes a few minutes)
+        run: |
+          for i in $(seq 1 90); do
+            curl -sf http://localhost:58080/realms/vprocly/.well-known/openid-configuration >/dev/null && break
+            sleep 2
+          done
+          for svc in temporal clamav; do
+            for i in $(seq 1 120); do
+              [ "$(docker inspect --format '{{.State.Health.Status}}' vprocly-$svc-1)" = healthy ] && break
+              sleep 5
+            done
+            docker inspect --format "$svc {{.State.Health.Status}}" vprocly-$svc-1
+          done
+      - run: pnpm db:migrate && pnpm --filter @vprocly/db seed:dev
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  excel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run: { working-directory: services/excel }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -e '.[dev]'
+      - run: ruff check . && ruff format --check .
+      - run: pytest -q
+
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint infra/helm/vprocly
+      - run: helm template ci infra/helm/vprocly > rendered.yaml
+      - run: docker run --rm -v "$PWD:/w" ghcr.io/yannh/kubeconform:latest -strict -summary /w/rendered.yaml
+
+  images:
+    needs: [node, excel, helm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - { name: api, file: infra/docker/node-service.Dockerfile, context: ., args: APP=api }
+          - { name: worker, file: infra/docker/node-service.Dockerfile, context: ., args: APP=worker }
+          - { name: web, file: apps/web/Dockerfile, context: ., args: '' }
+          - { name: excel, file: services/excel/Dockerfile, context: services/excel, args: '' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          build-args: ${{ matrix.args }}
+          load: true
+          tags: vprocly/${{ matrix.name }}:ci
+      - name: Vulnerability scan (fail on critical)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: vprocly/${{ matrix.name }}:ci
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+      - name: SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: vprocly/${{ matrix.name }}:ci
+          artifact-name: sbom-${{ matrix.name }}.spdx.json

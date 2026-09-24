@@ -1,0 +1,51 @@
+{{- $c := dict "root" . "component" "api" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vprocly.fullname" . }}-api
+  labels:
+    {{- include "vprocly.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels: {{- include "vprocly.selector" $c | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "vprocly.selector" $c | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "vprocly.podSecurity" . | nindent 6 }}
+      containers:
+        - name: api
+          image: {{ include "vprocly.image" (dict "root" . "name" "api") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "vprocly.containerSecurity" . | nindent 10 }}
+          envFrom:
+            - configMapRef: { name: {{ include "vprocly.fullname" . }}-config }
+            - secretRef: { name: {{ .Values.existingSecret }} }
+          ports:
+            - { name: http, containerPort: 4000 }
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+          resources: {{- toYaml .Values.api.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vprocly.fullname" . }}-api
+  labels: {{- include "vprocly.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "vprocly.selector" (dict "root" . "component" "api") | nindent 4 }}
+  ports:
+    - { name: http, port: 4000, targetPort: http }

@@ -1,0 +1,35 @@
+{{- $c := dict "root" . "component" "worker" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vprocly.fullname" . }}-worker
+  labels:
+    {{- include "vprocly.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels: {{- include "vprocly.selector" $c | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "vprocly.selector" $c | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "vprocly.podSecurity" . | nindent 6 }}
+      containers:
+        - name: worker
+          image: {{ include "vprocly.image" (dict "root" . "name" "worker") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "vprocly.containerSecurity" . | nindent 10 }}
+          envFrom:
+            - configMapRef: { name: {{ include "vprocly.fullname" . }}-config }
+            - secretRef: { name: {{ .Values.existingSecret }} }
+          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }

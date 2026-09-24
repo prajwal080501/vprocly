@@ -1,0 +1,48 @@
+{{- $c := dict "root" . "component" "excel" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vprocly.fullname" . }}-excel
+  labels:
+    {{- include "vprocly.labels" . | nindent 4 }}
+    app.kubernetes.io/component: excel
+spec:
+  replicas: {{ .Values.excel.replicas }}
+  selector:
+    matchLabels: {{- include "vprocly.selector" $c | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "vprocly.selector" $c | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "vprocly.podSecurity" . | nindent 6 }}
+      containers:
+        - name: excel
+          image: {{ include "vprocly.image" (dict "root" . "name" "excel") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "vprocly.containerSecurity" . | nindent 10 }}
+          ports:
+            - { name: http, containerPort: 8001 }
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+          readinessProbe:
+            httpGet: { path: /health/live, port: http }
+          resources: {{- toYaml .Values.excel.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vprocly.fullname" . }}-excel
+  labels: {{- include "vprocly.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "vprocly.selector" (dict "root" . "component" "excel") | nindent 4 }}
+  ports:
+    - { name: http, port: 8001, targetPort: http }

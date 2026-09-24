@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Dependency install scripts are opt-in (supply-chain control). Review before adding entries.
+allowBuilds:
+  esbuild: true
+  '@swc/core': true
+  sharp: true
+  unrs-resolver: true
+  '@scarf/scarf': false
+  protobufjs: false   # postinstall only prints a version notice

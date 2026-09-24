@@ -1,0 +1,53 @@
+{{- $c := dict "root" . "component" "web" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vprocly.fullname" . }}-web
+  labels:
+    {{- include "vprocly.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels: {{- include "vprocly.selector" $c | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "vprocly.selector" $c | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "vprocly.podSecurity" . | nindent 6 }}
+      containers:
+        - name: web
+          image: {{ include "vprocly.image" (dict "root" . "name" "web") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "vprocly.containerSecurity" . | nindent 10 }}
+          envFrom:
+            - configMapRef: { name: {{ include "vprocly.fullname" . }}-config }
+            - secretRef: { name: {{ .Values.existingSecret }} }
+          ports:
+            - { name: http, containerPort: 3000 }
+          livenessProbe:
+            httpGet: { path: /signin, port: http }
+          readinessProbe:
+            httpGet: { path: /signin, port: http }
+          resources: {{- toYaml .Values.web.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: next-cache, mountPath: /app/apps/web/.next/cache }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        - { name: next-cache, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vprocly.fullname" . }}-web
+  labels: {{- include "vprocly.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "vprocly.selector" (dict "root" . "component" "web") | nindent 4 }}
+  ports:
+    - { name: http, port: 3000, targetPort: http }

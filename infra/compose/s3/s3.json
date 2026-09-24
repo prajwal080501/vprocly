@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "vprocly",
+      "credentials": [{ "accessKey": "vprocly", "secretKey": "vprocly-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}
