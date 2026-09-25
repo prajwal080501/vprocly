@@ -14,5 +14,6 @@ FROM node:24-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
-USER 1000   # numeric so Kubernetes runAsNonRoot can verify it (uid of "node")
+# Numeric uid of "node", so Kubernetes runAsNonRoot can verify it.
+USER 1000
 CMD ["node", "dist/main.js"]

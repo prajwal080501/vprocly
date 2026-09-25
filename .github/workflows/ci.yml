@@ -25,13 +25,13 @@ jobs:
         run: docker compose -f infra/compose/docker-compose.yml up -d postgres keycloak nats s3 temporal clamav
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - name: Wait for Keycloak, Temporal and ClamAV (signature download takes a few minutes)
+      - name: Wait for Keycloak, S3, Temporal and ClamAV (signature download takes a few minutes)
         run: |
           for i in $(seq 1 90); do
             curl -sf http://localhost:58080/realms/vprocly/.well-known/openid-configuration >/dev/null && break
             sleep 2
           done
-          for svc in temporal clamav; do
+          for svc in s3 temporal clamav; do
             for i in $(seq 1 120); do
               [ "$(docker inspect --format '{{.State.Health.Status}}' vprocly-$svc-1)" = healthy ] && break
               sleep 5

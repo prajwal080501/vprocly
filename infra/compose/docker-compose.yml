@@ -21,11 +21,19 @@ services:
   # publishes community images. The app creates its buckets at startup.
   s3:
     image: chrislusf/seaweedfs:latest
-    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
+    # Explicit volume limits: each bucket needs its own volumes, and the auto limit derived from free disk
+    # is too low on small hosts (CI runners), which makes writes to a second bucket fail with InternalError.
+    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-volume.max=100", "-master.volumeSizeLimitMB=256",
+              "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
     ports: ["58333:8333"]
     volumes:
       - s3_data:/data
       - ./s3/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      # The S3 port opens before storage is writable; wait until the master reports a volume server.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9333/dir/status | grep -q '\"DataNodes\":\\[{'"]
+      interval: 3s
+      retries: 40
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.3
