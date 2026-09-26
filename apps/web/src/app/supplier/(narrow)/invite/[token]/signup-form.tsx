@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState } from 'react';
+import { signIn } from 'next-auth/react';
+import { useActionState, useEffect } from 'react';
 import type { Category } from '@/lib/types';
 import { signupSupplier, type SignupState } from './actions';
 
@@ -10,12 +11,16 @@ export function SignupForm({ token, email, categories, defaultCategoryId }: { to
   const action = signupSupplier.bind(null, token);
   const [state, formAction, pending] = useActionState<SignupState, FormData>(action, {});
 
+  useEffect(() => {
+    if (state.success) signIn('keycloak', { callbackUrl: '/supplier/dashboard' });
+  }, [state.success]);
+
   if (state.success) {
     return (
       <div className="rounded-xl border border-border bg-surface p-6 text-center">
         <p className="text-lg font-medium">You&apos;re all set!</p>
         <p className="mt-1 text-sm text-muted">Wallet balance: {state.success.walletBalance} points</p>
-        <p className="mt-4 text-sm text-muted">Bidding opens shortly — we&apos;ll email you when it does.</p>
+        <p className="mt-4 text-sm text-muted">Taking you to your dashboard…</p>
       </div>
     );
   }

@@ -42,11 +42,13 @@ bids across many buyer tenants, so a supplier cannot be *owned* by one tenant's 
 When a buyer accepts a bid, the platform auto-creates/links a row in *that buyer's* `suppliers` table from the winning
 `platform_suppliers` record. This feeds the existing vendor-master/PO module instead of duplicating it.
 
-**Auth:** a separate Keycloak realm (`vprocly-suppliers`) for supplier login, issuing tokens with a
-`platform_supplier_id` claim and **no** `tenant_id` claim. `AuthGuard` forks on which claim is present:
-- `tenant_id` present → existing tenant-RLS path (buyers, internal users).
-- `platform_supplier_id` present, no `tenant_id` → new supplier-scoped path: can only reach supplier endpoints (bids,
-  wallet, dashboard), never queries tenant tables directly.
+**Auth (as actually built):** one realm, one client (`vprocly`/`vprocly-web` — a separate `vprocly-suppliers` realm
+turned out unnecessary), issuing tokens with a `platform_supplier_id` claim and **no** `tenant_id` claim for a
+supplier login. Two independent guards fork on which claim is present, and never both run on the same route:
+- `AuthGuard` (global, `tenant_id` required) → existing tenant-RLS path (buyers, internal users). Unchanged.
+- `SupplierAuthGuard` (`@UseGuards`, applied per-route alongside `@Public()` to skip the global guard entirely,
+  `platform_supplier_id` + `supplier` role required) → supplier endpoints only (`/supplier/me`, `/supplier/lines`,
+  `/supplier/lines/:id/bids`), never queries tenant tables directly.
 
 ---
 
@@ -63,8 +65,8 @@ New module `sourcing` (tenant-scoped, RLS as usual):
 
 New module `bidding` (mixed access: tenant-scoped reads for the buyer side, supplier-scoped for the supplier side —
 this is where the blind-identity rule lives):
-- `bids(id, sourcing_line_id, platform_supplier_id, price, currency, notes, status ['submitted'|'accepted'|'rejected'], created_at, decided_at)` — one active bid per (line, supplier); a resubmission updates it while the line is open.
-- `bid_invites(id, sourcing_line_id, email, token_hash, expires_at, consumed_at, platform_supplier_id nullable)` — covers both the cold-start "buyer invites a specific email" case and the general "matched supplier gets notified" case.
+- `bids(id, tenant_id, sourcing_line_id, platform_supplier_id, unit_price, lead_time_days, notes, status ['submitted'|'accepted'|'rejected'|'withdrawn'], created_at, updated_at)` — tenant-scoped + RLS like the line it bids on (see migration 0012); one active bid per (line, supplier), enforced by a unique constraint. A resubmission updates it while the line is open, via `submit_supplier_bid` (SECURITY DEFINER, since the caller has no tenant session at all).
+- `sourcing_line_notifications` (already built in Phase A) doubles as the "cold-start invite" and the "matched supplier can see this on their dashboard" record — no separate `bid_invites` table was needed.
 
 New module `wallet` (platform-level, append-only — same pattern as the `budget_ledger` already built):
 - `wallet_ledger(id, platform_supplier_id, type ['grant'|'debit'|'credit'], points, ref_type, ref_id, balance_after, created_at)` — `ref_id` on a debit is the `bid.id`, with a unique constraint so a bid is only ever charged once, even on retry.
@@ -110,8 +112,8 @@ required for auto-matching; a buyer's manual email-invite bypasses this entirely
 
 | Phase | Weeks | Scope |
 |---|---|---|
-| **A** | 3–4 | `sourcing` module: BOM upload (Excel pipeline retargeted to `sourcing_lines`) + manual line entry. `marketplace-suppliers` module + `platform_suppliers` table + rule-based category/location matching. Supplier Keycloak realm. |
-| **B** | 5–6 | Supplier-side: signup from invite link, login, dashboard (open items, my bids), `wallet` module (grant on signup, debit on bid), bid submission with wallet check. |
+| **A** | 3–4 | Done. `sourcing` module: BOM upload (Excel pipeline retargeted to `sourcing_lines`) + manual line entry. `marketplace-suppliers` module + `platform_suppliers` table + rule-based category/location matching. |
+| **B** | 5–6 | Done. Supplier self-serve signup (`POST /supplier-signup`, no invite needed) and invite-gated signup both work; login uses the same Keycloak realm/client as buyers, forked on `platform_supplier_id` vs `tenant_id` (`SupplierAuthGuard`, not a separate realm — the plan's original two-realm idea turned out unnecessary). Dashboard (`/supplier/dashboard`): open lines matched via `sourcing_line_notifications`, blind (item code/description/qty/uom/need-by only). Bidding (`submit_supplier_bid`, migration 0012) debits `BID_FEE_POINTS` once per (line, supplier) atomically with the bid write; a price revision on an existing bid is free. Deleting a sourcing request with any bid on it is now blocked (`sourcing.service.ts` `remove()`). |
 | **C** | 7–8 | Buyer-side bid review/accept, blind-identity enforcement (tested explicitly — see below), reveal-on-accept email, auto-create vendor-master row + draft PO, "not selected" notification for losing bids. |
 
 This reorders (does not discard) the original plan: S1's Excel pipeline is built here, just aimed at sourcing lines.

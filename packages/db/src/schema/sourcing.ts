@@ -1,4 +1,4 @@
-import { date, index, numeric, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { date, index, integer, numeric, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { categories, platformSuppliers } from './marketplace.js';
 import { id, provenance, tenantId, timestamps } from './columns.js';
 import { tenants } from './tenancy.js';
@@ -52,4 +52,28 @@ export const sourcingLineNotifications = pgTable(
     ...timestamps,
   },
   (t) => [unique().on(t.sourcingLineId, t.email), index('sourcing_line_notifications_line_idx').on(t.sourcingLineId)],
+);
+
+/**
+ * A supplier's price quote on a line. Tenant-scoped and RLS-protected like the line it bids on -- the
+ * buyer eventually needs to review these within their own tenant. The write path is a supplier acting with
+ * no tenant session at all, so it goes through a SECURITY DEFINER function (submit_supplier_bid, migration
+ * 0012) the same way sourcing_line_notifications' invite functions do (migration 0006), never a direct
+ * insert from app code. One active bid per (line, supplier); resubmitting while the line is open updates it
+ * in place rather than creating a second row -- see the plan doc.
+ */
+export const bids = pgTable(
+  'bids',
+  {
+    id: id(),
+    tenantId: tenantId().references(() => tenants.id),
+    sourcingLineId: uuid('sourcing_line_id').notNull().references(() => sourcingLines.id),
+    platformSupplierId: uuid('platform_supplier_id').notNull().references(() => platformSuppliers.id),
+    unitPrice: numeric('unit_price', { precision: 14, scale: 2 }).notNull(),
+    leadTimeDays: integer('lead_time_days'),
+    notes: text('notes'),
+    status: text('status').notNull().default('submitted'), // 'submitted' | 'accepted' | 'rejected' | 'withdrawn'
+    ...timestamps,
+  },
+  (t) => [unique().on(t.sourcingLineId, t.platformSupplierId)],
 );

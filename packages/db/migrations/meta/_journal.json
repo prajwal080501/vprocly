@@ -85,6 +85,13 @@
       "when": 1790433820421,
       "tag": "0011_invite_item_code",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790439083644,
+      "tag": "0012_supplier_bidding",
+      "breakpoints": true
     }
   ]
 }

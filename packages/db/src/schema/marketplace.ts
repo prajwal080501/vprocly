@@ -25,6 +25,9 @@ export const platformSuppliers = pgTable('platform_suppliers', {
   phone: text('phone'),
   city: text('city').notNull(),
   state: text('state').notNull(),
+  // Nullable: only the self-serve signup (no invite) collects this today; the older invite-gated signup
+  // doesn't ask for it and there's no reason to force a backfill on those rows.
+  country: text('country'),
   status: text('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

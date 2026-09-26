@@ -39,7 +39,7 @@ pnpm dev                               # api :4000, worker, web :3000
 
 Excel service: `cd services/excel && python3 -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/uvicorn app.main:app --port 8001` (or `docker compose -f infra/compose/docker-compose.yml up -d excel`, a containerized copy on port 58001 for CI or a no-setup option; the two never collide).
 
-Dev users (password `password`): `alice` (Acme, requester), `bob` (Acme, approver/buyer/finance/admin), `carol` (Globex, requester/admin). Suppliers self-register through an emailed invite link (see below) — there is no dev supplier user. A new buyer company can also create its own account at `/signup` instead of being manually seeded.
+Dev users (password `password`): `alice` (Acme, requester), `bob` (Acme, approver/buyer/finance/admin), `carol` (Globex, requester/admin). There is no pre-seeded dev supplier user: suppliers self-register, either through an emailed invite link or, with no invite at all, at `/supplier/signup` (see below). A new buyer company can also create its own account at `/signup` instead of being manually seeded.
 
 | Service | URL |
 |---|---|
@@ -62,7 +62,11 @@ Dev users (password `password`): `alice` (Acme, requester), `bob` (Acme, approve
 
 A buyer posts items — by uploading a BOM (a fixed CSV/XLSX template, downloadable from the "New sourcing
 request" page) or entering them manually — and the platform matches suppliers by category and location,
-then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md](docs/plans/mvp-bidding-marketplace.md) for the full design and what's still deferred (bid submission, wallet debits, buyer accept/reveal — Phases B/C).
+then emails each one an invite link. Suppliers can also self-serve signup with no invite (`POST /supplier-signup`,
+web page `/supplier/signup`), log in (`/supplier/signin`), see their matched open lines on a dashboard
+(`/supplier/dashboard`), and place a price-quote bid that debits their wallet. See
+[docs/plans/mvp-bidding-marketplace.md](docs/plans/mvp-bidding-marketplace.md) for the full design and what's
+still deferred (buyer bid review/accept, identity reveal on accept — Phase C).
 
 - **Categories are a fixed, global, ad hoc-growing list** (29 as of migration 0010: the original 12
   generic-manufacturing ones plus 17 automotive ones added after a real automotive BOM import surfaced the
@@ -94,13 +98,28 @@ then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md]
   which is exactly what the blind-bid rule above exists to prevent. Local dev/test default to Mailpit for
   both identities, so the automated suite never touches real SMTP.
 - Supplier logins use the same Keycloak realm and client as buyers, just with a `platform_supplier_id`
-  attribute instead of `tenant_id` — one fewer issuer to manage, same security guarantee (`AuthGuard` forks
-  on which claim is present).
+  attribute instead of `tenant_id` — one fewer issuer to manage. Two independent guards, never both on the
+  same route: the global `AuthGuard` (requires `tenant_id`) untouched for buyer routes, and a separate
+  `SupplierAuthGuard` (`@UseGuards`, alongside `@Public()` to skip the global guard) for supplier routes.
+- **Bidding** (`POST /supplier/lines/:id/bids`): a price quote (unit price, optional lead time/notes) via
+  `submit_supplier_bid` (`SECURITY DEFINER`, migration 0012 — the caller has no tenant session at all, same
+  pattern as the invite functions). Debits `BID_FEE_POINTS` (currently 1) once per (line, supplier) — a
+  price revision on an existing bid is free — atomically with the bid write, so an insufficient balance rolls
+  back the bid too. `list_open_lines_for_supplier` (same migration) is the blind read side: only what
+  `sourcing_line_notifications` already matched this supplier to, and only the item code/description/qty/
+  uom/need-by columns, never the buyer. **Real Postgres gotcha found building this:** `INSERT ... ON CONFLICT
+  DO UPDATE` checks a `CHECK` constraint against the raw *insert* values before it even resolves the
+  conflict — so a debit landing on an existing row via the update branch still threw the wallet's
+  non-negative constraint violation, because the insert branch's literal (a negative delta) failed the check
+  on its own. Fixed in `WalletService.applyDelta` with a plain `UPDATE`, falling back to `INSERT` only when
+  no row exists — a plain `UPDATE` only ever checks the constraint against the actual final row.
 - **Deleting a sourcing request is a genuine delete** (the request, its lines and their notifications), not
   a soft-delete/cancel — the append-only audit log keeps the history regardless, since it's independent of
   the live rows. A deleted line's invite link correctly falls through to the existing "invalid or expired"
-  response, so no separate cancelled-state handling was needed. Phase B note: once bidding exists, this
-  needs a guard against deleting a request with an accepted bid.
+  response, so no separate cancelled-state handling was needed. Now that bidding exists, deleting a request
+  with any bid on one of its lines is blocked outright (`ConflictException`) — refunding wallet debits for
+  an unaccepted bid isn't decided yet, so the safe default is to block rather than silently orphan/refund
+  nothing.
 
 ## Accounts and organizations
 
@@ -116,7 +135,7 @@ then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md]
   see the git history if curious.
 - **Supplier organizations are one-person-per-company today** (`supplier_members`, one 'owner' row created
   at signup) — the data model already supports more than one member, but there is nowhere to invite a
-  teammate from yet: that needs a supplier login/dashboard, which is Phase B, not built.
+  teammate from yet in the now-built supplier dashboard; that's a fast-follow, not this pass.
 
 ## Tests
 
@@ -134,7 +153,8 @@ What the tests prove:
 - **API security:** roles are enforced, input is validated, and uploads go into quarantine with size and hash checks.
 - **Sourcing marketplace:** category+location matching, BOM template validation (missing/unrecognized columns, row errors, unknown categories — none of which commit anything), the blind-bid rule (asserted directly on the HTTP response body), wallet grant, invite replay protection, and that a signed-up supplier's token carries no `tenant_id`.
 - **Emails:** the supplier invite is sent from the `rfq@` identity and the buyer's separate summary from `noreply@` — asserted by checking the actual `From` header on each, not just that an email went out.
-- **Deleting a sourcing request:** cascades to its lines and notifications, survives in the audit log, is idempotent on a second delete (404, not a crash), and respects tenant isolation and roles.
+- **Supplier dashboard and bidding:** self-serve signup with no invite, that a supplier's `SupplierAuthGuard` token can't reach the buyer-only `/me` and a buyer token can't reach `/supplier/me`, the blind-bid rule on `/supplier/lines`, a bid debits the wallet exactly once even across a price revision, an insufficient balance is rejected with no partial bid or balance change, and bidding on a line the supplier was never matched to is rejected.
+- **Deleting a sourcing request:** cascades to its lines and notifications, survives in the audit log, is idempotent on a second delete (404, not a crash), respects tenant isolation and roles, and is now blocked outright once any bid exists on one of its lines.
 - **Organization signup:** a fresh tenant is empty and isolated from everyone else's data, two same-named companies get different slugs, and a duplicate email is rejected with `409` before anything is created — not after.
 
 ## Rules every module follows

@@ -64,3 +64,23 @@ export type InviteView =
   | { status: 'consumed' }
   | { status: 'already_registered'; email: string; line: InviteLineSummary }
   | { status: 'pending_signup'; email: string; line: InviteLineSummary };
+
+export type SupplierMe = {
+  name: string;
+  email: string;
+  city: string;
+  state: string;
+  country: string | null;
+  walletBalance: number;
+};
+
+export type OpenLineForSupplier = {
+  sourcingLineId: string;
+  itemCode: string | null;
+  description: string;
+  qty: string;
+  uom: string;
+  needBy: string | null;
+  alreadyBid: boolean;
+  myUnitPrice: string | null;
+};

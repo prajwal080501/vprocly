@@ -1,5 +1,6 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  bids,
   categories as categoriesTable,
   platformSuppliers,
   sourcingLineNotifications,
@@ -101,8 +102,9 @@ export class SourcingService {
    * keeps the history regardless, and a deleted line's invite link correctly falls through to the existing
    * "invalid or expired" response -- no separate cancelled-state handling needed there.
    *
-   * Phase B note: once bidding exists, this needs a guard against deleting a request with an accepted bid
-   * (and a decision on refunding wallet debits for any open bids on it) -- not a concern yet, no bids exist.
+   * Bidding now exists (Phase B): a request with any bid on any of its lines can't be deleted outright --
+   * refunding wallet debits for open-but-unaccepted bids isn't decided yet (see the plan doc's deferred
+   * items), so the safe default is to block the delete entirely rather than silently orphan/refund nothing.
    */
   async remove(ctx: RequestContext, id: string): Promise<void> {
     await this.tenantDb.run(ctx, async (tx) => {
@@ -112,6 +114,9 @@ export class SourcingService {
       const lines = await tx.select({ id: sourcingLines.id }).from(sourcingLines).where(eq(sourcingLines.sourcingRequestId, id));
       const lineIds = lines.map((l) => l.id);
       if (lineIds.length > 0) {
+        const [existingBid] = await tx.select({ id: bids.id }).from(bids).where(inArray(bids.sourcingLineId, lineIds)).limit(1);
+        if (existingBid) throw new ConflictException('Cannot delete a sourcing request that already has bids on it');
+
         await tx.delete(sourcingLineNotifications).where(inArray(sourcingLineNotifications.sourcingLineId, lineIds));
         await tx.delete(sourcingLines).where(eq(sourcingLines.sourcingRequestId, id));
       }

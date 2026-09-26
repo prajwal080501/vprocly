@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { createInviteToken } from '@vprocly/contracts';
 import {
+  bids,
   categories,
   createDatabase,
   createPool,
@@ -12,12 +13,14 @@ import {
   sourcingLines,
   supplierCategories,
   supplierMembers,
+  walletBalances,
   withTenant,
 } from '@vprocly/db';
 import { and, eq } from 'drizzle-orm';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp, decodeJwtClaims, tokenFor, tokenForCredentials } from './helpers.js';
+import { BID_FEE_POINTS } from '../src/modules/marketplace-suppliers/wallet.service.js';
 
 const ACME = '11111111-1111-4111-8111-111111111111';
 
@@ -390,5 +393,142 @@ describe('supplier invites: blind identity, signup, wallet grant, replay protect
     const secondToken = await seedInvite(sourcingLineId, email);
     const categoryId = await steelCategoryId();
     await http.post(`/api/invites/${secondToken}/signup`).send({ name: 'X', gst: 'X', categoryId, city: 'X', state: 'X', password: 'longenough1' }).expect(409);
+  });
+});
+
+describe('supplier dashboard: self-serve signup, login, open lines, bidding', () => {
+  const email = `selfsignup-${randomUUID().slice(0, 8)}@example.com`;
+  const password = 'a-very-long-supplier-password';
+  let sourcingRequestId: string;
+  let sourcingLineId: string;
+  let platformSupplierId: string;
+  let supplierToken: string;
+
+  const supplierAuth = () => ({ Authorization: `Bearer ${supplierToken}` });
+
+  beforeAll(async () => {
+    const categoryId = await steelCategoryId();
+    const city = `TestCity-${randomUUID().slice(0, 6)}`;
+    const res = await http
+      .post('/api/sourcing-requests')
+      .set(as('bob'))
+      .send({
+        title: 'Bidding dashboard test',
+        lines: [{ itemCode: 'DASH-1', description: 'Dashboard test item', categoryId, qty: 3, uom: 'NOS', deliveryCity: city, deliveryState: 'TestState', needBy: '2026-12-01' }],
+      })
+      .expect(201);
+    sourcingRequestId = res.body.sourcingRequestId;
+    const detail = await http.get(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(200);
+    sourcingLineId = detail.body.lines[0].id;
+  });
+
+  it('creates an account with no invite token, collecting name/gst/email/city/state/country', async () => {
+    const categoryId = await steelCategoryId();
+    const res = await http
+      .post('/api/supplier-signup')
+      .send({ name: 'Self Serve Co', gst: '27AAAAA0000A1Z5', email, categoryId, city: 'Pune', state: 'Maharashtra', country: 'India', password })
+      .expect(201);
+    expect(res.body).toEqual({ platformSupplierId: expect.stringMatching(/^[0-9a-f-]{36}$/), walletBalance: 1000 });
+    platformSupplierId = res.body.platformSupplierId;
+  });
+
+  it('refuses a duplicate email', async () => {
+    const categoryId = await steelCategoryId();
+    await http
+      .post('/api/supplier-signup')
+      .send({ name: 'X', gst: 'X', email, categoryId, city: 'X', state: 'X', country: 'X', password })
+      .expect(409);
+  });
+
+  it('logs in with platform_supplier_id and no tenant_id, and can reach /supplier/me', async () => {
+    supplierToken = await tokenForCredentials(email, password);
+    const claims = decodeJwtClaims(supplierToken);
+    expect('tenant_id' in claims).toBe(false);
+    expect(claims).toMatchObject({ platform_supplier_id: platformSupplierId, roles: expect.arrayContaining(['supplier']) });
+
+    const me = await http.get('/api/supplier/me').set(supplierAuth()).expect(200);
+    expect(me.body).toEqual({ name: 'Self Serve Co', email, city: 'Pune', state: 'Maharashtra', country: 'India', walletBalance: 1000 });
+  });
+
+  it('cannot reach the buyer-only /me, and a buyer token cannot reach /supplier/me (guards never overlap)', async () => {
+    await http.get('/api/me').set(supplierAuth()).expect(403);
+    await http.get('/api/supplier/me').set(as('bob')).expect(403);
+    await http.get('/api/supplier/me').expect(401);
+  });
+
+  it('sees no open lines until matched, and never any buyer/tenant field once it is (blind-bid rule)', async () => {
+    const before = await http.get('/api/supplier/lines').set(supplierAuth()).expect(200);
+    expect(before.body).toEqual([]);
+
+    // Real auto-matching is capped and ranked (see countActiveSuppliersInCategory's own comment above), so
+    // it can't guarantee a brand-new supplier lands in it -- seed the match directly instead, the same way
+    // the mailer would once it actually sends an email for it.
+    await withTenant(db, { tenantId: ACME }, (tx) =>
+      tx.insert(sourcingLineNotifications).values({ tenantId: ACME, sourcingLineId, email, platformSupplierId, sentAt: new Date() }),
+    );
+
+    const after = await http.get('/api/supplier/lines').set(supplierAuth()).expect(200);
+    expect(after.body).toEqual([
+      { sourcingLineId, itemCode: 'DASH-1', description: 'Dashboard test item', qty: '3.000', uom: 'NOS', needBy: '2026-12-01', alreadyBid: false, myUnitPrice: null },
+    ]);
+    const flat = JSON.stringify(after.body).toLowerCase();
+    for (const forbidden of ['acme', 'tenant', 'buyer']) expect(flat).not.toContain(forbidden);
+  });
+
+  it('rejects a bid on a line this supplier was never matched to', async () => {
+    const categoryId = await steelCategoryId();
+    const other = await http
+      .post('/api/sourcing-requests')
+      .set(as('bob'))
+      .send({ title: 'Unmatched line', lines: [{ description: 'Not for this supplier', categoryId, qty: 1, uom: 'NOS', deliveryCity: 'X', deliveryState: 'X' }] })
+      .expect(201);
+    const detail = await http.get(`/api/sourcing-requests/${other.body.sourcingRequestId}`).set(as('bob')).expect(200);
+    await http.post(`/api/supplier/lines/${detail.body.lines[0].id}/bids`).set(supplierAuth()).send({ unitPrice: 10 }).expect(403);
+  });
+
+  it('rejects invalid bid input', async () => {
+    await http.post(`/api/supplier/lines/${sourcingLineId}/bids`).set(supplierAuth()).send({ unitPrice: -5 }).expect(400);
+    await http.post(`/api/supplier/lines/${sourcingLineId}/bids`).set(supplierAuth()).send({}).expect(400);
+  });
+
+  it('places a bid, debiting BID_FEE_POINTS exactly once, then lets the price be revised for free', async () => {
+    const res = await http.post(`/api/supplier/lines/${sourcingLineId}/bids`).set(supplierAuth()).send({ unitPrice: 452.5, leadTimeDays: 7, notes: 'Can ship in one batch' }).expect(201);
+    expect(res.body).toEqual({ bidId: expect.stringMatching(/^[0-9a-f-]{36}$/), walletBalance: 1000 - BID_FEE_POINTS });
+
+    let lines = await http.get('/api/supplier/lines').set(supplierAuth()).expect(200);
+    expect(lines.body[0]).toMatchObject({ alreadyBid: true, myUnitPrice: '452.50' });
+
+    const revised = await http.post(`/api/supplier/lines/${sourcingLineId}/bids`).set(supplierAuth()).send({ unitPrice: 440 }).expect(201);
+    expect(revised.body).toEqual({ bidId: res.body.bidId, walletBalance: 1000 - BID_FEE_POINTS }); // same id, no second debit
+
+    lines = await http.get('/api/supplier/lines').set(supplierAuth()).expect(200);
+    expect(lines.body[0]).toMatchObject({ alreadyBid: true, myUnitPrice: '440.00' });
+  });
+
+  it('rejects a new bid when the wallet balance is insufficient, without creating a partial bid or touching the balance', async () => {
+    const categoryId = await steelCategoryId();
+    const other = await http
+      .post('/api/sourcing-requests')
+      .set(as('bob'))
+      .send({ title: 'Second line for balance test', lines: [{ description: 'Needs balance', categoryId, qty: 1, uom: 'NOS', deliveryCity: 'X', deliveryState: 'X' }] })
+      .expect(201);
+    const detail = await http.get(`/api/sourcing-requests/${other.body.sourcingRequestId}`).set(as('bob')).expect(200);
+    const otherLineId = detail.body.lines[0].id;
+    await withTenant(db, { tenantId: ACME }, (tx) =>
+      tx.insert(sourcingLineNotifications).values({ tenantId: ACME, sourcingLineId: otherLineId, email, platformSupplierId, sentAt: new Date() }),
+    );
+
+    await db.update(walletBalances).set({ balance: 0 }).where(eq(walletBalances.platformSupplierId, platformSupplierId));
+
+    await http.post(`/api/supplier/lines/${otherLineId}/bids`).set(supplierAuth()).send({ unitPrice: 10 }).expect(409);
+
+    const [balanceRow] = await db.select().from(walletBalances).where(eq(walletBalances.platformSupplierId, platformSupplierId));
+    expect(balanceRow!.balance).toBe(0);
+    const bidRows = await withTenant(db, { tenantId: ACME }, (tx) => tx.select().from(bids).where(eq(bids.sourcingLineId, otherLineId)));
+    expect(bidRows).toEqual([]);
+  });
+
+  it('blocks deleting a sourcing request that already has a bid on one of its lines', async () => {
+    await http.delete(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(409);
   });
 });

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { publicApi, PublicApiError } from '@/lib/public-api';
 import type { Category, InviteLineSummary, InviteView } from '@/lib/types';
 import { SignupForm } from './signup-form';
@@ -38,7 +39,8 @@ export default async function SupplierInvitePage({ params }: { params: Promise<{
         <h1 className="mb-4 text-xl font-semibold">New sourcing opportunity</h1>
         <LineSummary line={view.line} />
         <p className="text-center text-sm text-muted">
-          You&apos;re already registered ({view.email}). Log in to view and bid — the supplier dashboard is coming shortly.
+          You&apos;re already registered ({view.email}).{' '}
+          <Link href="/supplier/signin" className="text-accent hover:underline">Log in</Link> to view and bid.
         </p>
       </div>
     );

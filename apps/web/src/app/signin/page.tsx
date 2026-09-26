@@ -11,6 +11,9 @@ export default function SignInPage() {
         <p className="mt-4 text-center text-sm text-muted">
           New company? <Link href="/signup" className="text-accent hover:underline">Create your organisation</Link>
         </p>
+        <p className="mt-2 text-center text-sm text-muted">
+          Supplier? <Link href="/supplier/signin" className="text-accent hover:underline">Sign in here</Link>
+        </p>
       </div>
     </main>
   );
