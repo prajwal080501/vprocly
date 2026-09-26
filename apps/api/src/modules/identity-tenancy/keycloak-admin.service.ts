@@ -1,11 +1,12 @@
-import { Inject, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../../config.js';
 
 /**
  * Authenticates as a confidential service-account client scoped to realm-management:manage-users within the
  * target realm only (see infra/compose/keycloak/vprocly-realm.json: "vprocly-admin-api") -- deliberately
  * not master-realm admin credentials, which would be able to manage every realm on the server, not just
- * this one.
+ * this one. Shared by buyer organization signup and supplier signup: both need to create a Keycloak login,
+ * just with different attributes/roles.
  */
 @Injectable()
 export class KeycloakAdminService {
@@ -36,13 +37,31 @@ export class KeycloakAdminService {
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       this.logger.error(`Keycloak admin ${init.method ?? 'GET'} ${path} -> ${res.status}: ${body}`);
-      throw new InternalServerErrorException('Could not create the supplier account');
+      // A 409 here is the caller's mistake (email already exists), not a server failure -- distinct status
+      // so callers can tell "you did something wrong" from "we broke."
+      if (res.status === 409) throw new ConflictException('An account with this email already exists');
+      throw new InternalServerErrorException('Could not create the account');
     }
     return res;
   }
 
-  /** Creates a supplier login: no tenant_id, platform_supplier_id set, `supplier` realm role, given password. */
-  async createSupplierUser(input: { email: string; name: string; password: string; platformSupplierId: string }): Promise<string> {
+  /**
+   * Checked before creating a tenant/supplier row, not just relied on as a side effect of the 409 above --
+   * without this, a duplicate-email signup attempt would leave an orphaned tenant/supplier row with no
+   * working login, since that row is committed before this call. See organizations.service.ts and
+   * marketplace-suppliers.service.ts.
+   */
+  async emailTaken(email: string): Promise<boolean> {
+    const res = await this.adminFetch(`/users?email=${encodeURIComponent(email)}&exact=true`, { method: 'GET' });
+    const users = (await res.json()) as unknown[];
+    return users.length > 0;
+  }
+
+  /**
+   * Creates a Keycloak login with the given attributes (e.g. `{ tenant_id: [...] }` for a buyer,
+   * `{ platform_supplier_id: [...] }` for a supplier) and realm roles. Returns the new user's subject id.
+   */
+  async createUser(input: { email: string; name: string; password: string; attributes: Record<string, string[]>; roles: string[] }): Promise<string> {
     const [firstName, ...rest] = input.name.trim().split(/\s+/);
     const createRes = await this.adminFetch('/users', {
       method: 'POST',
@@ -53,7 +72,7 @@ export class KeycloakAdminService {
         enabled: true,
         firstName,
         lastName: rest.join(' ') || undefined,
-        attributes: { platform_supplier_id: [input.platformSupplierId] },
+        attributes: input.attributes,
         credentials: [{ type: 'password', value: input.password, temporary: false }],
       }),
     });
@@ -61,12 +80,12 @@ export class KeycloakAdminService {
     const subject = location?.split('/').pop();
     if (!subject) throw new InternalServerErrorException('Keycloak did not return the new user id');
 
-    const rolesRes = await this.adminFetch('/roles/supplier', { method: 'GET' });
-    const supplierRole = await rolesRes.json();
-    await this.adminFetch(`/users/${subject}/role-mappings/realm`, {
-      method: 'POST',
-      body: JSON.stringify([supplierRole]),
-    });
+    if (input.roles.length > 0) {
+      const roles = await Promise.all(
+        input.roles.map((name) => this.adminFetch(`/roles/${name}`, { method: 'GET' }).then((r) => r.json())),
+      );
+      await this.adminFetch(`/users/${subject}/role-mappings/realm`, { method: 'POST', body: JSON.stringify(roles) });
+    }
     return subject;
   }
 }

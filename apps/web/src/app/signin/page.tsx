@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { SignInButton } from '@/components/sign-in-button';
 
 export default function SignInPage() {
@@ -7,6 +8,9 @@ export default function SignInPage() {
         <h1 className="text-xl font-semibold">vProcly</h1>
         <p className="mt-1 mb-6 text-sm text-muted">Procurement, finance control and ExceptionOS.</p>
         <SignInButton />
+        <p className="mt-4 text-center text-sm text-muted">
+          New company? <Link href="/signup" className="text-accent hover:underline">Create your organisation</Link>
+        </p>
       </div>
     </main>
   );

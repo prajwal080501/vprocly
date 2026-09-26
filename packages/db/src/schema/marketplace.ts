@@ -1,4 +1,4 @@
-import { bigserial, integer, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigserial, integer, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { id } from './columns.js';
 
 /**
@@ -14,6 +14,9 @@ export const categories = pgTable('categories', {
   name: text('name').notNull().unique(),
 });
 
+/** A supplier company profile. Who can log in and act as it lives in supplierMembers below, not here --
+ *  a real supplier company has more than one person (Phase A only ever creates the 'owner' member; the
+ *  "invite a teammate" flow needs a supplier dashboard to invite from, which doesn't exist yet -- Phase B). */
 export const platformSuppliers = pgTable('platform_suppliers', {
   id: id(),
   name: text('name').notNull(),
@@ -22,10 +25,30 @@ export const platformSuppliers = pgTable('platform_suppliers', {
   phone: text('phone'),
   city: text('city').notNull(),
   state: text('state').notNull(),
-  keycloakSubject: text('keycloak_subject').notNull().unique(),
   status: text('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * One row per person who can log in as a platformSupplier. AuthGuard doesn't query this table at all --
+ * it trusts the platform_supplier_id claim already on the Keycloak token, set identically for every member
+ * of a company (see keycloak-admin.service.ts). This table exists to know who those members are and to let
+ * a signup fail cleanly if Keycloak creation fails: no member row is written until Keycloak confirms the
+ * login, so the failure mode is "a company profile with zero members" (visible, repairable), never an
+ * orphaned Keycloak login unlinked from any company.
+ */
+export const supplierMembers = pgTable(
+  'supplier_members',
+  {
+    id: id(),
+    platformSupplierId: uuid('platform_supplier_id').notNull().references(() => platformSuppliers.id),
+    email: text('email').notNull(),
+    keycloakSubject: text('keycloak_subject').notNull().unique(),
+    role: text('role').notNull().default('owner'), // 'owner' | 'member' -- only 'owner' is ever created so far
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.platformSupplierId, t.email)],
+);
 
 export const supplierCategories = pgTable(
   'supplier_categories',

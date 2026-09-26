@@ -50,6 +50,20 @@
       "when": 1790412248961,
       "tag": "0006_sourcing_invite_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790420024069,
+      "tag": "0007_organization_signup",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790420741522,
+      "tag": "0008_supplier_members",
+      "breakpoints": true
     }
   ]
 }

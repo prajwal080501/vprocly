@@ -4,6 +4,7 @@ import { DocumentsModule } from './modules/documents/index.js';
 import { IdentityTenancyModule } from './modules/identity-tenancy/index.js';
 import { MarketplaceSuppliersModule } from './modules/marketplace-suppliers/index.js';
 import { MasterDataModule } from './modules/master-data/index.js';
+import { OrganizationsModule } from './modules/organizations/index.js';
 import { SourcingModule } from './modules/sourcing/index.js';
 import { CorrelationMiddleware } from './platform/correlation.middleware.js';
 import { PlatformModule } from './platform/platform.module.js';
@@ -17,6 +18,7 @@ import { PlatformModule } from './platform/platform.module.js';
     MasterDataModule,
     MarketplaceSuppliersModule,
     SourcingModule,
+    OrganizationsModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { PlatformDb } from '../../platform/platform-db.service.js';
 import { hashInviteToken } from '@vprocly/contracts';
-import { KeycloakAdminService } from './keycloak-admin.service.js';
+import { KeycloakAdminService } from '../identity-tenancy/index.js';
 import { SIGNUP_GRANT_POINTS, WalletService } from './wallet.service.js';
 
 export const SignupInput = z.object({
@@ -85,6 +85,9 @@ export class MarketplaceSuppliersService {
       tx.select({ id: platformSuppliers.id }).from(platformSuppliers).where(eq(platformSuppliers.email, invite.email)),
     );
     if (alreadyRegistered) throw new ConflictException('This email is already registered; log in instead (coming soon)');
+    // Also covers an email already used for a different kind of account (e.g. a buyer) -- Keycloak usernames
+    // are unique across the whole realm, not just within suppliers.
+    if (await this.keycloakAdmin.emailTaken(invite.email)) throw new ConflictException('An account with this email already exists');
 
     const [category] = await this.platformDb.run((tx) => tx.select().from(categories).where(eq(categories.id, input.categoryId)));
     if (!category) throw new BadRequestException('Unknown category');
@@ -120,11 +123,12 @@ export class MarketplaceSuppliersService {
     });
 
     try {
-      const keycloakSubject = await this.keycloakAdmin.createSupplierUser({
+      const keycloakSubject = await this.keycloakAdmin.createUser({
         email: invite.email,
         name: input.name,
         password: input.password,
-        platformSupplierId: supplierId,
+        attributes: { platform_supplier_id: [supplierId] },
+        roles: ['supplier'],
       });
       await this.platformDb.run((tx) => tx.update(platformSuppliers).set({ keycloakSubject }).where(eq(platformSuppliers.id, supplierId)));
     } catch (err) {
