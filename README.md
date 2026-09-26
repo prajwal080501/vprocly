@@ -78,6 +78,12 @@ then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md]
   token never sits in the durable, replayable outbox/event payload — only its hash is ever persisted.
 - **Wallet**: 1000 points free on signup, no real-money top-up yet (flagged legal/regulatory risk, see the
   plan doc). The balance can never go negative — enforced by a database check constraint, not just app code.
+- **Two SMTP identities, deliberately separate** (`apps/worker/src/mailer.ts`): `rfq@` sends the invite
+  emails suppliers actually see; `noreply@` sends a summary back to the buyer ("your request went to N
+  suppliers"). The buyer is **never CC'd on the supplier's own email** — that would put the buyer's real
+  address in the CC header, leaking their identity to the supplier regardless of what the email body says,
+  which is exactly what the blind-bid rule above exists to prevent. Local dev/test default to Mailpit for
+  both identities, so the automated suite never touches real SMTP.
 - Supplier logins use the same Keycloak realm and client as buyers, just with a `platform_supplier_id`
   attribute instead of `tenant_id` — one fewer issuer to manage, same security guarantee (`AuthGuard` forks
   on which claim is present).
@@ -118,6 +124,7 @@ What the tests prove:
 - **Workflows:** the upload deadline expires abandoned uploads, stops early when the upload completes, and starts only once per upload.
 - **API security:** roles are enforced, input is validated, and uploads go into quarantine with size and hash checks.
 - **Sourcing marketplace:** category+location matching, BOM template validation (missing/unrecognized columns, row errors, unknown categories — none of which commit anything), the blind-bid rule (asserted directly on the HTTP response body), wallet grant, invite replay protection, and that a signed-up supplier's token carries no `tenant_id`.
+- **Emails:** the supplier invite is sent from the `rfq@` identity and the buyer's separate summary from `noreply@` — asserted by checking the actual `From` header on each, not just that an email went out.
 - **Deleting a sourcing request:** cascades to its lines and notifications, survives in the audit log, is idempotent on a second delete (404, not a crash), and respects tenant isolation and roles.
 - **Organization signup:** a fresh tenant is empty and isolated from everyone else's data, two same-named companies get different slugs, and a duplicate email is rejected with `409` before anything is created — not after.
 

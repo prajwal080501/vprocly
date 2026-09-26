@@ -132,6 +132,14 @@ describe('sourcing: manual creation, matching, isolation, audit and events', () 
     const events = await withTenant(db, { tenantId: ACME }, (tx) => tx.select().from(outbox).where(eq(outbox.aggregateId, sourcingLineId)));
     expect(events.map((e) => e.eventType)).toEqual(expect.arrayContaining(['sourcing.sourcing_line_matched']));
 
+    // The aggregated per-request event (drives the buyer's summary email) carries the same totals the
+    // response already reported, computed once every line has been matched, not just this one.
+    const requestEvents = await withTenant(db, { tenantId: ACME }, (tx) =>
+      tx.select().from(outbox).where(eq(outbox.aggregateId, sourcingRequestId)),
+    );
+    const matched = requestEvents.find((e) => e.eventType === 'sourcing.sourcing_request_matched');
+    expect(matched?.payload).toMatchObject({ title: 'Test BOM', lineCount: 1, matchedSupplierCount: Math.min(baseline, 10), invitedNewCount: 1 });
+
     // Notification row exists but has no token yet -- the worker fills that in only when it sends the email.
     // (The line's own category may also have pre-existing matched suppliers from other runs, so this checks
     // for the specific cold-start invite rather than asserting the whole set of notification rows.)

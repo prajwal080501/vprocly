@@ -217,6 +217,23 @@ export class SourcingService {
         const summary = await this.commitLine(tx, ctx, request!.id, line);
         summaries.push(summary);
       }
+
+      // Aggregated totals, emitted once the whole request (not just one line) is fully matched, so the
+      // buyer-summary email (worker) can build its counts straight from the payload with no re-query.
+      await this.events.emit(tx, ctx, {
+        type: 'sourcing.sourcing_request_matched',
+        version: 1,
+        aggregateType: 'sourcing_request',
+        aggregateId: request!.id,
+        payload: {
+          sourcingRequestId: request!.id,
+          title,
+          lineCount: lines.length,
+          matchedSupplierCount: summaries.reduce((n, s) => n + s.matchedSupplierCount, 0),
+          invitedNewCount: summaries.reduce((n, s) => n + s.invitedNewCount, 0),
+        },
+      });
+
       return { sourcingRequestId: request!.id, title, lineCount: lines.length, matches: summaries };
     });
   }

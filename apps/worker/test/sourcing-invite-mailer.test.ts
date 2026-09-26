@@ -12,8 +12,9 @@ const ACME = '11111111-1111-4111-8111-111111111111';
 const MAILPIT_API = process.env.MAILPIT_API ?? 'http://localhost:58025';
 const pool = createPool(process.env.DATABASE_URL ?? 'postgres://vprocly_app:vprocly_app@localhost:55432/vprocly');
 const db = createDatabase(pool);
-const mailer = nodemailer.createTransport({ host: process.env.SMTP_HOST ?? 'localhost', port: Number(process.env.SMTP_PORT ?? 51025), secure: false });
-const deps = { db, mailer, mailFrom: 'vProcly Marketplace <marketplace@vprocly.example>', publicWebUrl: 'http://localhost:3000' };
+const transport = nodemailer.createTransport({ host: process.env.SMTP_HOST ?? 'localhost', port: Number(process.env.SMTP_PORT ?? 51025), secure: false });
+const mailers = { rfq: transport, rfqFrom: 'vProcly RFQ <rfq@vprocly.example>', noreply: transport, noreplyFrom: 'vProcly <noreply@vprocly.example>' };
+const deps = { db, mailers, publicWebUrl: 'http://localhost:3000' };
 const consumer = sourcingInviteMailer(deps);
 
 afterAll(async () => {
@@ -57,11 +58,15 @@ function matchedEvent(sourcingLineId: string): EventEnvelope {
   };
 }
 
-async function lastMailpitMessageTo(email: string): Promise<{ Text: string; ID: string } | null> {
-  const list = (await (await fetch(`${MAILPIT_API}/api/v1/messages`)).json()) as { messages: { ID: string; To: { Address: string }[] }[] };
-  const hit = list.messages.find((m) => m.To.some((t) => t.Address === email));
-  if (!hit) return null;
-  return (await (await fetch(`${MAILPIT_API}/api/v1/message/${hit.ID}`)).json()) as { Text: string; ID: string };
+/** Polls briefly: Mailpit's REST API can lag a moment behind its own SMTP acceptance of the message. */
+async function lastMailpitMessageTo(email: string): Promise<{ Text: string; ID: string; From: { Address: string } } | null> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const list = (await (await fetch(`${MAILPIT_API}/api/v1/messages`)).json()) as { messages: { ID: string; To: { Address: string }[] }[] };
+    const hit = list.messages.find((m) => m.To.some((t) => t.Address === email));
+    if (hit) return (await (await fetch(`${MAILPIT_API}/api/v1/message/${hit.ID}`)).json()) as { Text: string; ID: string; From: { Address: string } };
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return null;
 }
 
 describe('sourcing invite mailer', () => {
@@ -75,6 +80,7 @@ describe('sourcing invite mailer', () => {
     expect(msg).not.toBeNull();
     expect(msg!.Text).toContain('Mailer test item');
     expect(msg!.Text.toLowerCase()).not.toMatch(/acme|tenant|buyer/);
+    expect(msg!.From.Address).toBe('rfq@vprocly.example'); // the rfq identity, never noreply
 
     const link = msg!.Text.match(/supplier\/invite\/(\S+)/)?.[1];
     expect(link).toBeDefined();

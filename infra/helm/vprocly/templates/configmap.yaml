@@ -38,3 +38,9 @@ data:
   {{- end }}
   KEYCLOAK_ADMIN_URL: {{ .Values.config.keycloakAdminUrl | quote }}
   KEYCLOAK_ADMIN_CLIENT_ID: {{ .Values.config.keycloakAdminClientId | quote }}
+  SMTP_HOST: {{ .Values.config.smtpHost | quote }}
+  SMTP_PORT: {{ .Values.config.smtpPort | quote }}
+  SMTP_FROM: {{ .Values.config.smtpFrom | quote }}
+  NOREPLY_SMTP_HOST: {{ .Values.config.smtpNoreplyHost | quote }}
+  NOREPLY_SMTP_PORT: {{ .Values.config.smtpNoreplyPort | quote }}
+  NOREPLY_SMTP_FROM: {{ .Values.config.smtpNoreplyFrom | quote }}

@@ -35,10 +35,19 @@ config:
   # Only needed if the Excel service cannot reach s3Endpoint directly (e.g. it resolves differently for a
   # containerized service than for this API) -- see S3_EXCEL_ENDPOINT in object-storage.service.ts.
   s3ExcelEndpoint: ""
+  # Two SMTP identities: smtp* sends the actual invite emails suppliers see; smtpNoreply* sends system
+  # notifications back to the buyer only (never to a supplier) -- see apps/worker/src/mailer.ts. Usernames
+  # and passwords go in existingSecret (SMTP_USER/SMTP_PASS/NOREPLY_SMTP_USER/NOREPLY_SMTP_PASS), not here.
+  smtpHost: mail.privateemail.com
+  smtpPort: 587
+  smtpFrom: "vProcly RFQ <rfq@vprocly.com>"
+  smtpNoreplyHost: mail.privateemail.com
+  smtpNoreplyPort: 587
+  smtpNoreplyFrom: "vProcly <noreply@vprocly.com>"
 
 # Secret must provide: DATABASE_URL (app role), DATABASE_ADMIN_URL (migrations/owner role), S3_ACCESS_KEY,
-# S3_SECRET_KEY, NEXTAUTH_SECRET, OIDC_CLIENT_SECRET, KEYCLOAK_ADMIN_CLIENT_SECRET. Manage it with External
-# Secrets / Vault.
+# S3_SECRET_KEY, NEXTAUTH_SECRET, OIDC_CLIENT_SECRET, KEYCLOAK_ADMIN_CLIENT_SECRET, SMTP_USER, SMTP_PASS,
+# NOREPLY_SMTP_USER, NOREPLY_SMTP_PASS. Manage it with External Secrets / Vault.
 existingSecret: vprocly-secrets
 
 migrations:

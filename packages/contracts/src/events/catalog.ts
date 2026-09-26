@@ -46,6 +46,16 @@ export const SourcingLineMatchedV1 = z.object({
   invitedNewCount: z.number().int().nonnegative(),
 });
 
+/** Fires once per request, after every line has been matched -- aggregated totals, so the buyer-summary
+ *  email (sourcing-request-summary-mailer.ts) never needs to re-query anything to build its counts. */
+export const SourcingRequestMatchedV1 = z.object({
+  sourcingRequestId: z.uuid(),
+  title: z.string(),
+  lineCount: z.number().int().nonnegative(),
+  matchedSupplierCount: z.number().int().nonnegative(),
+  invitedNewCount: z.number().int().nonnegative(),
+});
+
 export const SupplierRegisteredV1 = z.object({
   platformSupplierId: z.uuid(),
   email: z.string(),
@@ -60,6 +70,7 @@ export const EventCatalog = {
   'sourcing.sourcing_request_created': { 1: SourcingRequestCreatedV1 },
   'sourcing.sourcing_request_deleted': { 1: SourcingRequestDeletedV1 },
   'sourcing.sourcing_line_matched': { 1: SourcingLineMatchedV1 },
+  'sourcing.sourcing_request_matched': { 1: SourcingRequestMatchedV1 },
   'marketplace.supplier_registered': { 1: SupplierRegisteredV1 },
 } as const;
 

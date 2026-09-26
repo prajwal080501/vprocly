@@ -1,8 +1,8 @@
 import { createInviteToken, INVITE_TOKEN_TTL_DAYS } from '@vprocly/contracts';
 import { categories, sourcingLineNotifications, sourcingLines, withTenant, type Database } from '@vprocly/db';
 import { and, eq, isNull } from 'drizzle-orm';
-import type { Transporter } from 'nodemailer';
 import type { ConsumerDefinition } from '../consumer.js';
+import type { Mailers } from '../mailer.js';
 
 type PendingInvite = { id: string; email: string; tokenHash: string; token: string; expiresAt: Date };
 
@@ -24,7 +24,7 @@ type LineInfo = {
  * against a supplier silently never being notified. A per-recipient reconciliation sweep is a fast-follow.
  */
 export function sourcingInviteMailer(
-  deps: { db: Database; mailer: Transporter; mailFrom: string; publicWebUrl: string },
+  deps: { db: Database; mailers: Mailers; publicWebUrl: string },
 ): ConsumerDefinition<{ pending: PendingInvite[] }> {
   return {
     name: 'sourcing-invite-mailer',
@@ -58,8 +58,8 @@ export function sourcingInviteMailer(
 
       for (const invite of pending) {
         const link = `${deps.publicWebUrl}/supplier/invite/${invite.token}`;
-        await deps.mailer.sendMail({
-          from: deps.mailFrom,
+        await deps.mailers.rfq.sendMail({
+          from: deps.mailers.rfqFrom,
           to: invite.email,
           subject: `New sourcing opportunity: ${line.description}`,
           text: [
