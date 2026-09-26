@@ -64,6 +64,14 @@ A buyer posts items — by uploading a BOM (a fixed CSV/XLSX template, downloada
 request" page) or entering them manually — and the platform matches suppliers by category and location,
 then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md](docs/plans/mvp-bidding-marketplace.md) for the full design and what's still deferred (bid submission, wallet debits, buyer accept/reveal — Phases B/C).
 
+- **Categories are a fixed, global, ad hoc-growing list** (29 as of migration 0010: the original 12
+  generic-manufacturing ones plus 17 automotive ones added after a real automotive BOM import surfaced the
+  gap). A BOM row whose category isn't an exact match (case-insensitive) fails with `unknown category`
+  rather than being guessed at — add the missing name via a new migration, the same way 0004 and 0010 did,
+  rather than trying to fuzzy-match synonyms onto the existing list. Making categories tenant-manageable
+  (a buyer adds their own) is a real fast-follow if this ad hoc growth becomes unwieldy across many
+  industries, but is out of scope for now.
+
 - **Matching is category-required, location-ranked-not-filtered**: any active supplier in the category is
   matched, ranked by exact city then exact state, capped at 10 per line. A thin early supplier pool still
   gets notified even outside their exact city — deliberate, not a bug.

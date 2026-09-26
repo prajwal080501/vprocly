@@ -76,10 +76,12 @@ async function countActiveSuppliersInCategory(categoryId: string): Promise<numbe
 }
 
 describe('categories', () => {
-  it('is public and seeded', async () => {
+  it('is public and seeded, including both the original generic-manufacturing and later automotive sets', async () => {
     const res = await http.get('/api/categories').expect(200);
-    expect(res.body.length).toBeGreaterThanOrEqual(12);
-    expect(res.body.map((c: { name: string }) => c.name)).toContain('Steel & Metal Products');
+    const names = res.body.map((c: { name: string }) => c.name);
+    expect(res.body.length).toBeGreaterThanOrEqual(29);
+    expect(names).toContain('Steel & Metal Products'); // migration 0004
+    expect(names).toEqual(expect.arrayContaining(['Body & Structure', 'ADAS', 'EV Powertrain'])); // migration 0010
   });
 });
 
@@ -306,6 +308,21 @@ describe('sourcing: BOM import (fixed template)', () => {
     expect(res.body.status).toBeUndefined(); // success shape has no 'status' field, unlike the error shapes
     expect(res.body.lineCount).toBe(2);
     expect(res.body.matches.map((m: { invitedNewCount: number }) => m.invitedNewCount)).toEqual([1, 0]);
+  });
+
+  it('imports a real-world automotive BOM using the later-added category set (migration 0010)', async () => {
+    const city = `AutoCity-${randomUUID().slice(0, 6)}`;
+    const csv = [
+      HEADER,
+      `MB-1,High-strength automotive steel sheet 1.2mm,Body & Structure,12000,KG,${city},Maharashtra,2026-10-20,`,
+      `MB-2,Front ventilated brake disc 350mm,Braking,500,EA,${city},Maharashtra,2026-11-05,`,
+      `MB-3,77GHz automotive radar sensor module,ADAS,250,EA,${city},Maharashtra,2026-11-18,`,
+      `MB-4,400V traction inverter 150kW class,EV Powertrain,250,EA,${city},Maharashtra,2026-12-05,`,
+    ].join('\n');
+    const documentId = await uploadCleanCsv(csv);
+    const res = await http.post('/api/sourcing-requests/import').set(as('bob')).send({ title: 'Automotive BOM', documentId }).expect(201);
+    expect(res.body.status).toBeUndefined();
+    expect(res.body.lineCount).toBe(4);
   });
 });
 
