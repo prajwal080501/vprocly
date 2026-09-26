@@ -13,6 +13,7 @@ process.env.S3_SECRET_KEY ??= 'vprocly-secret';
 process.env.EXCEL_SERVICE_URL ??= 'http://localhost:8001';
 process.env.KEYCLOAK_ADMIN_URL ??= 'http://localhost:58080';
 process.env.KEYCLOAK_ADMIN_CLIENT_SECRET ??= 'vprocly-admin-api-secret';
+console.error(`[test/helpers] EXCEL_SERVICE_URL=${process.env.EXCEL_SERVICE_URL} S3_EXCEL_ENDPOINT=${process.env.S3_EXCEL_ENDPOINT}`);
 
 export async function createTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
