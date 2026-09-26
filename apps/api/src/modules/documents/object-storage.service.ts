@@ -17,18 +17,25 @@ import { APP_CONFIG, type AppConfig } from '../../config.js';
 export class ObjectStorage implements OnModuleInit {
   private readonly logger = new Logger(ObjectStorage.name);
   readonly client: S3Client;
+  /** Signs URLs reachable from wherever the Excel service runs, which is not always the same network
+   *  context as this API (e.g. in CI or Kubernetes the Excel service is containerized and cannot resolve
+   *  "localhost" as this process's host). Falls back to `client` when they are the same. A presigned URL's
+   *  signature covers the Host header, so this cannot be done by string-editing the URL after signing --
+   *  it needs its own client constructed with the right endpoint from the start. */
+  private readonly excelFetchClient: S3Client;
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {
-    this.client = new S3Client({
+    const base = {
       region: config.S3_REGION,
-      endpoint: config.S3_ENDPOINT,
       forcePathStyle: Boolean(config.S3_ENDPOINT),
       // Otherwise the SDK signs a checksum of the (empty) body into presigned PUTs and the real upload is
       // rejected as BadDigest by S3-compatible stores.
-      requestChecksumCalculation: 'WHEN_REQUIRED',
-      responseChecksumValidation: 'WHEN_REQUIRED',
+      requestChecksumCalculation: 'WHEN_REQUIRED' as const,
+      responseChecksumValidation: 'WHEN_REQUIRED' as const,
       credentials: { accessKeyId: config.S3_ACCESS_KEY, secretAccessKey: config.S3_SECRET_KEY },
-    });
+    };
+    this.client = new S3Client({ ...base, endpoint: config.S3_ENDPOINT });
+    this.excelFetchClient = config.S3_EXCEL_ENDPOINT ? new S3Client({ ...base, endpoint: config.S3_EXCEL_ENDPOINT }) : this.client;
   }
 
   get buckets() {
@@ -64,6 +71,11 @@ export class ObjectStorage implements OnModuleInit {
       }),
       { expiresIn },
     );
+  }
+
+  /** For a URL that only the Excel service will fetch (never a browser) -- see excelFetchClient above. */
+  presignGetForExcelService(bucket: string, key: string, expiresIn = 300) {
+    return getSignedUrl(this.excelFetchClient, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });
   }
 
   async head(bucket: string, key: string) {

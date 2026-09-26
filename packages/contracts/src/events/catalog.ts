@@ -30,11 +30,31 @@ export const DocumentScannedV1 = z.object({
   signature: z.string().nullable(),
 });
 
+export const SourcingRequestCreatedV1 = z.object({
+  sourcingRequestId: z.uuid(),
+  lineCount: z.number().int().nonnegative(),
+});
+
+export const SourcingLineMatchedV1 = z.object({
+  sourcingLineId: z.uuid(),
+  matchedSupplierCount: z.number().int().nonnegative(),
+  invitedNewCount: z.number().int().nonnegative(),
+});
+
+export const SupplierRegisteredV1 = z.object({
+  platformSupplierId: z.uuid(),
+  email: z.string(),
+  grantedPoints: z.number().int().positive(),
+});
+
 export const EventCatalog = {
   'master_data.supplier_created': { 1: SupplierCreatedV1 },
   'documents.upload_requested': { 1: UploadRequestedV1 },
   'documents.document_uploaded': { 1: DocumentUploadedV1 },
   'documents.document_scanned': { 1: DocumentScannedV1 },
+  'sourcing.sourcing_request_created': { 1: SourcingRequestCreatedV1 },
+  'sourcing.sourcing_line_matched': { 1: SourcingLineMatchedV1 },
+  'marketplace.supplier_registered': { 1: SupplierRegisteredV1 },
 } as const;
 
 export type EventType = keyof typeof EventCatalog;

@@ -6,6 +6,7 @@ import { ClamAv } from './clamav.js';
 import { loadConfig } from './config.js';
 import { runConsumer } from './consumer.js';
 import { buildConsumers } from './consumers/index.js';
+import { createMailer } from './mailer.js';
 import { ObjectStorage } from './object-storage.js';
 import { relayOnce } from './relay.js';
 import { ensureStreams } from './streams.js';
@@ -36,6 +37,9 @@ const consumers = buildConsumers({
   temporal,
   taskQueue: config.TEMPORAL_TASK_QUEUE,
   uploadDeadlineSeconds: config.UPLOAD_DEADLINE_SECONDS,
+  mailer: createMailer(config),
+  mailFrom: config.MAIL_FROM,
+  publicWebUrl: config.PUBLIC_WEB_URL,
 });
 const running = await Promise.all(consumers.map((def) => runConsumer(nc, js, db, def)));
 

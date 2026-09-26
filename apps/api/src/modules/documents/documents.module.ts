@@ -8,6 +8,6 @@ import { ObjectStorage } from './object-storage.service.js';
   imports: [AuditEvidenceModule],
   controllers: [DocumentsController],
   providers: [DocumentsService, ObjectStorage],
-  exports: [DocumentsService],
+  exports: [DocumentsService, ObjectStorage],
 })
 export class DocumentsModule {}

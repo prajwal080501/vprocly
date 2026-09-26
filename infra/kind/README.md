@@ -25,7 +25,8 @@ kubectl -n vprocly create secret generic vprocly-secrets \
   --from-literal=DATABASE_URL=postgres://vprocly_app:vprocly_app@host.docker.internal:55432/vprocly \
   --from-literal=DATABASE_ADMIN_URL=postgres://vprocly_admin:vprocly_admin@host.docker.internal:55432/vprocly \
   --from-literal=S3_ACCESS_KEY=vprocly --from-literal=S3_SECRET_KEY=vprocly-secret \
-  --from-literal=NEXTAUTH_SECRET=$(openssl rand -hex 32) --from-literal=OIDC_CLIENT_SECRET=vprocly-web-secret
+  --from-literal=NEXTAUTH_SECRET=$(openssl rand -hex 32) --from-literal=OIDC_CLIENT_SECRET=vprocly-web-secret \
+  --from-literal=KEYCLOAK_ADMIN_CLIENT_SECRET=vprocly-admin-api-secret
 
 # Argo CD, with a read-only deploy key for this private repo
 kubectl create namespace argocd

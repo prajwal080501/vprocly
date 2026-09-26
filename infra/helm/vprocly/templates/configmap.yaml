@@ -28,5 +28,13 @@ data:
   UPLOAD_DEADLINE_SECONDS: {{ .Values.config.uploadDeadlineSeconds | quote }}
   CORS_ORIGIN: {{ .Values.config.publicUrl | quote }}
   NEXTAUTH_URL: {{ .Values.config.publicUrl | quote }}
+  # Used to build supplier invite links in emails -- must be the real public URL, not the code's
+  # localhost default, or invite links sent in production would be unusable.
+  PUBLIC_WEB_URL: {{ .Values.config.publicUrl | quote }}
   API_URL: "http://{{ include "vprocly.fullname" . }}-api:4000/api"
   EXCEL_SERVICE_URL: "http://{{ include "vprocly.fullname" . }}-excel:8001"
+  {{- with .Values.config.s3ExcelEndpoint }}
+  S3_EXCEL_ENDPOINT: {{ . | quote }}
+  {{- end }}
+  KEYCLOAK_ADMIN_URL: {{ .Values.config.keycloakAdminUrl | quote }}
+  KEYCLOAK_ADMIN_CLIENT_ID: {{ .Values.config.keycloakAdminClientId | quote }}

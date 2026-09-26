@@ -5,6 +5,7 @@
     "dev": { "cache": false, "persistent": true },
     "lint": {},
     "typecheck": { "dependsOn": ["^build"] },
+    "@vprocly/web#typecheck": { "dependsOn": ["^build", "build"] },
     "test": { "dependsOn": ["^build"], "env": ["DATABASE_URL", "DATABASE_ADMIN_URL"] }
   }
 }

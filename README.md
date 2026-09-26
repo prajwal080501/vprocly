@@ -2,16 +2,17 @@
 
 Procurement, finance control and ExceptionOS. Architecture: [docs/vprocly_procurement_finance_onprem_architecture.pdf](docs/vprocly_procurement_finance_onprem_architecture.pdf).
 
-Status: **Sprint 0 (foundation)** of the 18-week MVP plan. Includes tenancy, identity, audit, events, document storage with virus scanning, durable workflows (Temporal), packaging and CI. The first business module (suppliers) is included as the reference pattern.
+Status: **Sprint 0 (foundation)** plus a **Phase A pivot**: a BOM-to-bid sourcing marketplace (see [docs/plans/mvp-bidding-marketplace.md](docs/plans/mvp-bidding-marketplace.md)), which now takes priority over the original Sprint 1 plan. Sprint 0 covers tenancy, identity, audit, events, document storage with virus scanning, durable workflows (Temporal), packaging and CI, with suppliers as the reference module. Phase A adds BOM upload/manual entry, category+location supplier matching, blind-bid supplier invites and self-signup, and a wallet.
 
 ## Layout
 
 ```
 apps/api            NestJS modular monolith (REST, OpenAPI at /api/docs)
 apps/worker         Outbox relay → NATS JetStream, idempotent consumers, dead-letter queue,
-                    virus scanning (ClamAV), Temporal workflows and activities
-apps/web            Next.js app (Keycloak sign-in via next-auth, server-side API calls)
-services/excel      Python FastAPI Excel service (workbook inspection; staging writes from Sprint 1)
+                    virus scanning (ClamAV), Temporal workflows, supplier invite emails
+apps/web            Next.js app (Keycloak sign-in via next-auth; buyer pages server-authenticated,
+                    /supplier/invite pages public)
+services/excel      Python FastAPI Excel service (workbook inspection + full-row /parse for BOM import)
 packages/db         Drizzle schema, SQL migrations (RLS, audit, outbox), tenant-scoped DB helpers
 packages/contracts  Versioned event schemas and shared enums
 packages/config     Shared TypeScript config
@@ -36,9 +37,9 @@ cp apps/web/.env.example apps/web/.env.local
 pnpm dev                               # api :4000, worker, web :3000
 ```
 
-Excel service: `cd services/excel && python3 -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/uvicorn app.main:app --port 8001`
+Excel service: `cd services/excel && python3 -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/uvicorn app.main:app --port 8001` (or `docker compose -f infra/compose/docker-compose.yml up -d excel`, a containerized copy on port 58001 for CI or a no-setup option; the two never collide).
 
-Dev users (password `password`): `alice` (Acme, requester), `bob` (Acme, approver/buyer/finance/admin), `carol` (Globex, requester/admin).
+Dev users (password `password`): `alice` (Acme, requester), `bob` (Acme, approver/buyer/finance/admin), `carol` (Globex, requester/admin). Suppliers self-register through an emailed invite link (see below) — there is no dev supplier user.
 
 | Service | URL |
 |---|---|
@@ -57,6 +58,30 @@ Dev users (password `password`): `alice` (Acme, requester), `bob` (Acme, approve
 - Download links (5 minutes) are issued only for `clean` documents, and every issued link is audited.
 - Deadlines run as Temporal workflows (`uploadDeadlineWorkflow`). They are started and signalled from outbox events, so a Temporal outage delays them but never loses them.
 
+## Sourcing marketplace (Phase A)
+
+A buyer posts items — by uploading a BOM (a fixed CSV/XLSX template, downloadable from the "New sourcing
+request" page) or entering them manually — and the platform matches suppliers by category and location,
+then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md](docs/plans/mvp-bidding-marketplace.md) for the full design and what's still deferred (bid submission, wallet debits, buyer accept/reveal — Phases B/C).
+
+- **Matching is category-required, location-ranked-not-filtered**: any active supplier in the category is
+  matched, ranked by exact city then exact state, capped at 10 per line. A thin early supplier pool still
+  gets notified even outside their exact city — deliberate, not a bug.
+- **Blind-bid rule**: the invite email and the `/supplier/invite/:token` page never contain the buyer's
+  identity — only the item, quantity, delivery location and category. Enforced at the database layer: the
+  lookup runs through a `SECURITY DEFINER` SQL function (`resolve_sourcing_line_invite`, migration 0006)
+  that can only ever return those specific columns, the same pattern already used for the outbox relay.
+- **Suppliers are platform-level, not tenant-scoped** (`platform_suppliers`, no RLS — see
+  `packages/db/src/schema/marketplace.ts`): the same supplier bids across many buyer tenants. A buyer's own
+  `suppliers` vendor-master table stays private and gets a row once a bid is accepted (Phase C).
+- **Invite tokens are generated only when the email is actually sent** (in the worker, not the API): a raw
+  token never sits in the durable, replayable outbox/event payload — only its hash is ever persisted.
+- **Wallet**: 1000 points free on signup, no real-money top-up yet (flagged legal/regulatory risk, see the
+  plan doc). The balance can never go negative — enforced by a database check constraint, not just app code.
+- Supplier logins use the same Keycloak realm and client as buyers, just with a `platform_supplier_id`
+  attribute instead of `tenant_id` — one fewer issuer to manage, same security guarantee (`AuthGuard` forks
+  on which claim is present).
+
 ## Tests
 
 `pnpm test` runs integration tests against the dev stack, with real Postgres, Keycloak tokens, NATS, S3, ClamAV and Temporal. The Python tests are in `services/excel` and run with `pytest`.
@@ -69,6 +94,7 @@ What the tests prove:
 - **Virus scanning:** real ClamAV detects the EICAR test file (kept in quarantine), clean files are released, and redelivery is a no-op.
 - **Workflows:** the upload deadline expires abandoned uploads, stops early when the upload completes, and starts only once per upload.
 - **API security:** roles are enforced, input is validated, and uploads go into quarantine with size and hash checks.
+- **Sourcing marketplace:** category+location matching, BOM template validation (missing/unrecognized columns, row errors, unknown categories — none of which commit anything), the blind-bid rule (asserted directly on the HTTP response body), wallet grant, invite replay protection, and that a signed-up supplier's token carries no `tenant_id`.
 
 ## Rules every module follows
 
@@ -88,6 +114,14 @@ What the tests prove:
 | NestJS worker | Plain Node worker | The relay, consumers and a Temporal worker don't need Nest's DI. |
 | — | Debian slim Node images | The Temporal native core does not support Alpine/musl. |
 | clamav/clamav | clamav/clamav-debian | The same official project; this variant is multi-arch (arm64 + amd64). |
+| — | Scoped `vprocly-admin-api` service-account client | Creates supplier Keycloak users via `realm-management: manage-users, view-realm` on this realm only, not master-realm admin credentials. |
+| — | `S3_EXCEL_ENDPOINT` (optional) | When the Excel service runs in a different network context than the API (e.g. containerized in CI, reached via `host.docker.internal`, while the API runs natively), it needs its own presigned-URL endpoint — a URL's signature covers the host, so this can't be fixed by editing the URL after signing. Unset in normal deployments where both share reachability. |
+
+**Known gap:** if the API commits a supplier signup but the Keycloak call to create their login then fails
+(rare — e.g. Keycloak is down), the supplier row is stuck with a placeholder `keycloakSubject`. This is
+visible and repairable (not a silent orphan in Keycloak, which the reverse order would risk), but there is
+no automatic retry yet — a reconciliation job is a Phase B follow-up, the same class of gap the original
+blueprint's own metrics anticipated ("unreconciled synchronization records").
 
 ## Production database prerequisites
 

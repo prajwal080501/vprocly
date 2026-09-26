@@ -21,11 +21,13 @@
     "@vprocly/contracts": "workspace:*",
     "@vprocly/db": "workspace:*",
     "drizzle-orm": "^0.45.3",
+    "nodemailer": "^10.0.10",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@temporalio/testing": "^1.24.0",
     "@types/node": "^26.6.2",
+    "@types/nodemailer": "^8.0.2",
     "@vprocly/config": "workspace:*",
     "typescript": "~6.0.3",
     "vitest": "^5.0.1"

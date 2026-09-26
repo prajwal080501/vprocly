@@ -20,6 +20,7 @@ class SheetInspection:
     headers: list[str]
     data_rows: int
     sample: list[list[Any]]
+    rows: list[list[Any]] | None = None  # all body rows; only populated when inspect_rows(include_rows=True)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -66,14 +67,15 @@ def _normalize_headers(row: list[Any]) -> list[str]:
     return headers
 
 
-def inspect_rows(name: str, rows: list[list[Any]]) -> SheetInspection:
+def inspect_rows(name: str, rows: list[list[Any]], include_rows: bool = False) -> SheetInspection:
     header_idx = find_header_row(rows)
     if header_idx is None:
         return SheetInspection(name, None, [], 0, [])
     headers = _normalize_headers(rows[header_idx])
     body = [r[: len(headers)] for r in rows[header_idx + 1 :] if any(not _is_blank(c) for c in r)]
     sample = [[_jsonable(c) for c in r] for r in body[:SAMPLE_ROWS]]
-    return SheetInspection(name, header_idx + 1, headers, len(body), sample)
+    all_rows = [[_jsonable(c) for c in r] for r in body] if include_rows else None
+    return SheetInspection(name, header_idx + 1, headers, len(body), sample, all_rows)
 
 
 def _jsonable(v: Any) -> Any:
@@ -82,10 +84,13 @@ def _jsonable(v: Any) -> Any:
     return str(v)
 
 
-def inspect_workbook(data: bytes, filename: str) -> list[SheetInspection]:
+def inspect_workbook(data: bytes, filename: str, include_rows: bool = False) -> list[SheetInspection]:
     if filename.lower().endswith(".csv"):
         text = data.decode("utf-8-sig", errors="replace")
         rows = [list(r) for r in csv.reader(io.StringIO(text))]
-        return [inspect_rows("CSV", rows)]
+        return [inspect_rows("CSV", rows, include_rows)]
     wb = CalamineWorkbook.from_filelike(io.BytesIO(data))
-    return [inspect_rows(name, wb.get_sheet_by_name(name).to_python(skip_empty_area=False)) for name in wb.sheet_names]
+    return [
+        inspect_rows(name, wb.get_sheet_by_name(name).to_python(skip_empty_area=False), include_rows)
+        for name in wb.sheet_names
+    ]

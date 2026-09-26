@@ -22,6 +22,34 @@
       "when": 1790277067700,
       "tag": "0002_document_scan",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790411879991,
+      "tag": "0003_marketplace_sourcing",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790411918403,
+      "tag": "0004_marketplace_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790412061550,
+      "tag": "0005_wallet_balance_nonnegative",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790412248961,
+      "tag": "0006_sourcing_invite_functions",
+      "breakpoints": true
     }
   ]
 }

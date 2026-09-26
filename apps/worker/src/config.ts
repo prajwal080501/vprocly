@@ -17,6 +17,11 @@ const Env = z.object({
   TEMPORAL_NAMESPACE: z.string().default('default'),
   TEMPORAL_TASK_QUEUE: z.string().default('vprocly-platform'),
   UPLOAD_DEADLINE_SECONDS: z.coerce.number().int().positive().default(3600),
+  SMTP_HOST: z.string().default('localhost'),
+  SMTP_PORT: z.coerce.number().int().default(51025),
+  MAIL_FROM: z.string().default('vProcly Marketplace <marketplace@vprocly.example>'),
+  PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
+  INVITE_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(14),
 });
 export type WorkerConfig = z.infer<typeof Env>;
 

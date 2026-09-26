@@ -6,9 +6,9 @@ import { usePathname } from 'next/navigation';
 // Items without href are planned for later sprints and shown disabled so the product shape is visible.
 const NAV: { label: string; href?: string; sprint?: string }[] = [
   { label: 'Overview', href: '/' },
+  { label: 'Sourcing', href: '/sourcing' },
   { label: 'Imports', sprint: 'S1' },
   { label: 'Requests', sprint: 'S3' },
-  { label: 'Sourcing', sprint: 'S4' },
   { label: 'Purchase orders', sprint: 'S5' },
   { label: 'Budgets', sprint: 'S3' },
   { label: 'Exceptions', sprint: 'S6' },
@@ -25,7 +25,9 @@ export function Nav() {
             key={item.label}
             href={item.href}
             className={`whitespace-nowrap rounded-md px-3 py-2 text-sm ${
-              path === item.href ? 'bg-surface-2 font-medium' : 'text-muted hover:bg-surface-2 hover:text-text'
+              path === item.href || (item.href !== '/' && path.startsWith(item.href))
+                ? 'bg-surface-2 font-medium'
+                : 'text-muted hover:bg-surface-2 hover:text-text'
             }`}
           >
             {item.label}

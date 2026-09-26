@@ -85,6 +85,24 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports: ["51025:1025", "58025:8025"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/api/v1/messages"]
+      interval: 5s
+      retries: 20
+
+  # Containerized Excel service, for CI and anyone who wants a no-setup option. Local development normally
+  # runs it directly (README) with --reload on the default port 8001; this uses a different host port
+  # (58001) so the two never collide if both happen to be running.
+  excel:
+    build: ../../services/excel
+    ports: ["58001:8001"]
+    # So it can fetch a presigned URL pointing at the host-published S3 port (see S3_EXCEL_ENDPOINT in the
+    # API config). Docker Desktop resolves host.docker.internal natively; Linux (e.g. CI runners) needs this.
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/live')"]
+      interval: 5s
+      retries: 20
 
 volumes:
   pg_data:

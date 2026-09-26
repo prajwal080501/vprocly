@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - name: Start dev stack
-        run: docker compose -f infra/compose/docker-compose.yml up -d postgres keycloak nats s3 temporal clamav
+        run: docker compose -f infra/compose/docker-compose.yml up -d postgres keycloak nats s3 temporal clamav mailpit excel
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Wait for Keycloak, S3, Temporal and ClamAV (signature download takes a few minutes)
@@ -31,7 +31,7 @@ jobs:
             curl -sf http://localhost:58080/realms/vprocly/.well-known/openid-configuration >/dev/null && break
             sleep 2
           done
-          for svc in s3 temporal clamav; do
+          for svc in s3 temporal clamav mailpit excel; do
             for i in $(seq 1 120); do
               [ "$(docker inspect --format '{{.State.Health.Status}}' vprocly-$svc-1)" = healthy ] && break
               sleep 5
@@ -42,6 +42,13 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+        env:
+          # The Excel service normally runs locally on 8001 (see README); CI uses the containerized one on
+          # 58001 instead (docker-compose.yml) so the two never collide.
+          EXCEL_SERVICE_URL: http://localhost:58001
+          # The containerized Excel service cannot resolve "localhost" as this job's host; it needs
+          # host.docker.internal to fetch a presigned URL pointing at the host-published S3 port.
+          S3_EXCEL_ENDPOINT: http://host.docker.internal:58333
 
   excel:
     runs-on: ubuntu-latest

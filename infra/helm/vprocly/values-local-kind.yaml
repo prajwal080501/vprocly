@@ -17,6 +17,7 @@ config:
   clamavHost: host.docker.internal
   clamavPort: 53310
   temporalAddress: host.docker.internal:57233
+  keycloakAdminUrl: http://host.docker.internal:58080
 
 existingSecret: vprocly-secrets
 

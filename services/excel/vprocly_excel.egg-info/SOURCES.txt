@@ -1,6 +1,0 @@
-pyproject.toml
-vprocly_excel.egg-info/PKG-INFO
-vprocly_excel.egg-info/SOURCES.txt
-vprocly_excel.egg-info/dependency_links.txt
-vprocly_excel.egg-info/requires.txt
-vprocly_excel.egg-info/top_level.txt
