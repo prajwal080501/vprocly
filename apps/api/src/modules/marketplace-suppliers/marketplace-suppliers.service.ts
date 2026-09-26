@@ -18,6 +18,7 @@ export const SignupInput = z.object({
 export type SignupInput = z.infer<typeof SignupInput>;
 
 export type InviteLineSummary = {
+  itemCode: string | null;
   description: string;
   qty: string;
   uom: string;
@@ -62,6 +63,7 @@ export class MarketplaceSuppliersService {
     if (invite.consumed) return { status: 'consumed' };
 
     const line: InviteLineSummary = {
+      itemCode: invite.item_code,
       description: invite.description,
       qty: invite.qty,
       uom: invite.uom,

@@ -50,6 +50,7 @@ export type ImportResult =
   | { sourcingRequestId: string; title: string; lineCount: number; matches: MatchSummary[] };
 
 export type InviteLineSummary = {
+  itemCode: string | null;
   description: string;
   qty: string;
   uom: string;

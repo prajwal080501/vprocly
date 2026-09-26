@@ -4,6 +4,7 @@ import type { Tx } from './client.js';
 export type SourcingLineInvite = {
   email: string;
   consumed: boolean;
+  item_code: string | null;
   description: string;
   qty: string;
   uom: string;

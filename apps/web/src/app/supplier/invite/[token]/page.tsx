@@ -5,6 +5,7 @@ import { SignupForm } from './signup-form';
 function LineSummary({ line }: { line: InviteLineSummary }) {
   return (
     <div className="mb-4 rounded-xl border border-border bg-surface-2 p-4 text-sm">
+      {line.itemCode && <p className="font-mono text-xs text-muted">{line.itemCode}</p>}
       <p className="font-medium">{line.description}</p>
       <p className="text-muted">
         {line.qty} {line.uom} · delivered to {line.deliveryCity}, {line.deliveryState}

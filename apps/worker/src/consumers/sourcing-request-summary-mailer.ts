@@ -2,6 +2,7 @@ import { users, withTenant, type Database } from '@vprocly/db';
 import { eq } from 'drizzle-orm';
 import type { ConsumerDefinition } from '../consumer.js';
 import type { Mailers } from '../mailer.js';
+import { renderEmailHtml } from '../email-template.js';
 
 /**
  * Lets the buyer see what went out without ever putting them on the same email a supplier receives: CC'ing
@@ -35,6 +36,17 @@ export function sourcingRequestSummaryMailer(deps: { db: Database; mailers: Mail
           ``,
           `View it: ${link}`,
         ].join('\n'),
+        html: renderEmailHtml({
+          preheader: `Your sourcing request "${p.title}" went out to suppliers.`,
+          heading: 'Sourcing request sent',
+          bodyHtml: [
+            `<p style="margin:0 0 12px;">${buyer.name ? `Hi ${buyer.name},` : 'Hi,'}</p>`,
+            `<p style="margin:0 0 12px;">Your sourcing request <strong>"${p.title}"</strong> (${p.lineCount} item${p.lineCount === 1 ? '' : 's'}) went out to suppliers.</p>`,
+            `<p style="margin:0;">${p.matchedSupplierCount} already-registered supplier${p.matchedSupplierCount === 1 ? ' was' : 's were'} matched and notified, and ${p.invitedNewCount} new supplier${p.invitedNewCount === 1 ? ' was' : 's were'} invited.</p>`,
+          ].join(''),
+          cta: { label: 'View request', url: link },
+          footerNote: 'You are receiving this because you submitted a sourcing request on vProcly.',
+        }),
       });
     },
     async handler() {}, // nothing to persist; the email itself is the whole effect

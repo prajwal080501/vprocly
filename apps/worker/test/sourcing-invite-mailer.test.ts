@@ -30,6 +30,7 @@ async function seedLineWithPendingNotification(email: string) {
       .values({
         tenantId: ACME,
         sourcingRequestId: request!.id,
+        itemCode: 'MT-001',
         description: 'Mailer test item',
         categoryId: category!.id,
         qty: '3.000',
@@ -59,11 +60,11 @@ function matchedEvent(sourcingLineId: string): EventEnvelope {
 }
 
 /** Polls briefly: Mailpit's REST API can lag a moment behind its own SMTP acceptance of the message. */
-async function lastMailpitMessageTo(email: string): Promise<{ Text: string; ID: string; From: { Address: string } } | null> {
+async function lastMailpitMessageTo(email: string): Promise<{ Text: string; HTML: string; ID: string; From: { Address: string } } | null> {
   for (let attempt = 0; attempt < 20; attempt++) {
     const list = (await (await fetch(`${MAILPIT_API}/api/v1/messages`)).json()) as { messages: { ID: string; To: { Address: string }[] }[] };
     const hit = list.messages.find((m) => m.To.some((t) => t.Address === email));
-    if (hit) return (await (await fetch(`${MAILPIT_API}/api/v1/message/${hit.ID}`)).json()) as { Text: string; ID: string; From: { Address: string } };
+    if (hit) return (await (await fetch(`${MAILPIT_API}/api/v1/message/${hit.ID}`)).json()) as { Text: string; HTML: string; ID: string; From: { Address: string } };
     await new Promise((r) => setTimeout(r, 250));
   }
   return null;
@@ -79,7 +80,11 @@ describe('sourcing invite mailer', () => {
     const msg = await lastMailpitMessageTo(email);
     expect(msg).not.toBeNull();
     expect(msg!.Text).toContain('Mailer test item');
+    expect(msg!.Text).toContain('MT-001');
     expect(msg!.Text.toLowerCase()).not.toMatch(/acme|tenant|buyer/);
+    expect(msg!.HTML).toContain('Mailer test item');
+    expect(msg!.HTML).toContain('MT-001');
+    expect(msg!.HTML.toLowerCase()).not.toMatch(/acme|tenant|buyer/);
     expect(msg!.From.Address).toBe('rfq@vprocly.example'); // the rfq identity, never noreply
 
     const link = msg!.Text.match(/supplier\/invite\/(\S+)/)?.[1];

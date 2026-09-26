@@ -3,10 +3,12 @@ import { categories, sourcingLineNotifications, sourcingLines, withTenant, type 
 import { and, eq, isNull } from 'drizzle-orm';
 import type { ConsumerDefinition } from '../consumer.js';
 import type { Mailers } from '../mailer.js';
+import { renderDetailsTable, renderEmailHtml } from '../email-template.js';
 
 type PendingInvite = { id: string; email: string; tokenHash: string; token: string; expiresAt: Date };
 
 type LineInfo = {
+  itemCode: string | null;
   description: string;
   qty: string;
   uom: string;
@@ -34,6 +36,7 @@ export function sourcingInviteMailer(
       const { line, pendingRows } = await withTenant(deps.db, { tenantId: event.tenantId }, async (tx) => {
         const [row] = await tx
           .select({
+            itemCode: sourcingLines.itemCode,
             description: sourcingLines.description,
             qty: sourcingLines.qty,
             uom: sourcingLines.uom,
@@ -58,6 +61,14 @@ export function sourcingInviteMailer(
 
       for (const invite of pending) {
         const link = `${deps.publicWebUrl}/supplier/invite/${invite.token}`;
+        const detailRows: Array<[string, string]> = [
+          ...(line.itemCode ? ([['Item code', line.itemCode]] as Array<[string, string]>) : []),
+          ['Item', line.description],
+          ['Category', line.categoryName],
+          ['Quantity', `${line.qty} ${line.uom}`],
+          ['Delivery to', `${line.deliveryCity}, ${line.deliveryState}`],
+          ...(line.needBy ? ([['Needed by', line.needBy]] as Array<[string, string]>) : []),
+        ];
         await deps.mailers.rfq.sendMail({
           from: deps.mailers.rfqFrom,
           to: invite.email,
@@ -65,6 +76,7 @@ export function sourcingInviteMailer(
           text: [
             `You have been matched to a sourcing opportunity on vProcly.`,
             ``,
+            ...(line.itemCode ? [`Item code: ${line.itemCode}`] : []),
             `Item: ${line.description}`,
             `Category: ${line.categoryName}`,
             `Quantity: ${line.qty} ${line.uom}`,
@@ -76,6 +88,13 @@ export function sourcingInviteMailer(
           ]
             .filter((l): l is string => l !== undefined)
             .join('\n'),
+          html: renderEmailHtml({
+            preheader: `You've been matched to a new sourcing opportunity: ${line.description}`,
+            heading: 'New sourcing opportunity',
+            bodyHtml: `<p style="margin:0 0 4px;">You have been matched to a sourcing opportunity on vProcly.</p>${renderDetailsTable(detailRows)}`,
+            cta: { label: 'View and get started', url: link },
+            footerNote: `This link expires in ${INVITE_TOKEN_TTL_DAYS} days.`,
+          }),
         });
       }
       return { pending };

@@ -76,9 +76,10 @@ then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md]
   matched, ranked by exact city then exact state, capped at 10 per line. A thin early supplier pool still
   gets notified even outside their exact city — deliberate, not a bug.
 - **Blind-bid rule**: the invite email and the `/supplier/invite/:token` page never contain the buyer's
-  identity — only the item, quantity, delivery location and category. Enforced at the database layer: the
-  lookup runs through a `SECURITY DEFINER` SQL function (`resolve_sourcing_line_invite`, migration 0006)
-  that can only ever return those specific columns, the same pattern already used for the outbox relay.
+  identity — only the item code, description, quantity, delivery location and category. Enforced at the
+  database layer: the lookup runs through a `SECURITY DEFINER` SQL function (`resolve_sourcing_line_invite`,
+  migration 0006, column list extended by 0011) that can only ever return those specific columns, the same
+  pattern already used for the outbox relay.
 - **Suppliers are platform-level, not tenant-scoped** (`platform_suppliers`, no RLS — see
   `packages/db/src/schema/marketplace.ts`): the same supplier bids across many buyer tenants. A buyer's own
   `suppliers` vendor-master table stays private and gets a row once a bid is accepted (Phase C).
