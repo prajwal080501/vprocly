@@ -4,7 +4,6 @@ metadata:
   name: {{ include "vprocly.fullname" . }}-config
   labels: {{- include "vprocly.labels" . | nindent 4 }}
 data:
-  PORT: "4000"
   OIDC_ISSUER: {{ .Values.config.oidcIssuer | quote }}
   OIDC_AUDIENCE: {{ .Values.config.oidcAudience | quote }}
   OIDC_CLIENT_ID: {{ .Values.config.oidcClientId | quote }}

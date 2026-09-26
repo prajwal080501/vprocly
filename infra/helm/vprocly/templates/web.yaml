@@ -28,6 +28,9 @@ spec:
           envFrom:
             - configMapRef: { name: {{ include "vprocly.fullname" . }}-config }
             - secretRef: { name: {{ .Values.existingSecret }} }
+          env:
+            # Per container: a shared PORT in the ConfigMap would make every service listen on the same port.
+            - { name: PORT, value: "3000" }
           ports:
             - { name: http, containerPort: 3000 }
           livenessProbe:
