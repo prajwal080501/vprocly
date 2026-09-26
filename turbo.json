@@ -6,6 +6,9 @@
     "lint": {},
     "typecheck": { "dependsOn": ["^build"] },
     "@vprocly/web#typecheck": { "dependsOn": ["^build", "build"] },
-    "test": { "dependsOn": ["^build"], "env": ["DATABASE_URL", "DATABASE_ADMIN_URL"] }
+    "test": {
+      "dependsOn": ["^build"],
+      "env": ["DATABASE_URL", "DATABASE_ADMIN_URL", "EXCEL_SERVICE_URL", "S3_EXCEL_ENDPOINT"]
+    }
   }
 }

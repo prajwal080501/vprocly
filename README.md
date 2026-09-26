@@ -86,6 +86,8 @@ then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md]
 
 `pnpm test` runs integration tests against the dev stack, with real Postgres, Keycloak tokens, NATS, S3, ClamAV and Temporal. The Python tests are in `services/excel` and run with `pytest`.
 
+**Turbo + CI env vars, a gotcha:** Turborepo passes through the whole environment when run locally, but when it detects CI it only passes a task's `env` list from `turbo.json` — anything else is silently dropped, and the code falls back to its default with no error. This bit `EXCEL_SERVICE_URL`/`S3_EXCEL_ENDPOINT` once already (worked everywhere locally, silently used the wrong port only in CI). If a test needs a CI-specific env override, add it to `test.env` in `turbo.json`, not just the workflow file. Force-reproduce locally with `CI=true pnpm test`.
+
 What the tests prove:
 - **Tenant isolation:** row-level security blocks cross-tenant reads, writes and updates, and a query with no tenant context sees nothing.
 - **Audit trail:** the audit log is append-only for the app role and hash-chained per tenant, and chain verification passes.
