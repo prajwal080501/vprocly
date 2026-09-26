@@ -35,6 +35,11 @@ export const SourcingRequestCreatedV1 = z.object({
   lineCount: z.number().int().nonnegative(),
 });
 
+export const SourcingRequestDeletedV1 = z.object({
+  sourcingRequestId: z.uuid(),
+  lineCount: z.number().int().nonnegative(),
+});
+
 export const SourcingLineMatchedV1 = z.object({
   sourcingLineId: z.uuid(),
   matchedSupplierCount: z.number().int().nonnegative(),
@@ -53,6 +58,7 @@ export const EventCatalog = {
   'documents.document_uploaded': { 1: DocumentUploadedV1 },
   'documents.document_scanned': { 1: DocumentScannedV1 },
   'sourcing.sourcing_request_created': { 1: SourcingRequestCreatedV1 },
+  'sourcing.sourcing_request_deleted': { 1: SourcingRequestDeletedV1 },
   'sourcing.sourcing_line_matched': { 1: SourcingLineMatchedV1 },
   'marketplace.supplier_registered': { 1: SupplierRegisteredV1 },
 } as const;

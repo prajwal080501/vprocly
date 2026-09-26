@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { SourcingRequestSummary } from '@/lib/types';
+import { DeleteSourcingRequestButton } from './delete-button';
 
 export default async function SourcingListPage() {
   const requests = await api<SourcingRequestSummary[]>('/sourcing-requests');
@@ -25,6 +26,7 @@ export default async function SourcingListPage() {
               <th className="px-4 py-2.5 font-medium">Source</th>
               <th className="px-4 py-2.5 font-medium">Status</th>
               <th className="px-4 py-2.5 font-medium">Created</th>
+              <th className="px-4 py-2.5 font-medium"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -38,11 +40,14 @@ export default async function SourcingListPage() {
                 <td className="px-4 py-2.5 text-muted">{r.source === 'bom_upload' ? 'BOM upload' : 'Manual entry'}</td>
                 <td className="px-4 py-2.5">{r.status}</td>
                 <td className="px-4 py-2.5 text-muted">{new Date(r.createdAt).toLocaleDateString()}</td>
+                <td className="px-4 py-2.5 text-right">
+                  <DeleteSourcingRequestButton id={r.id} title={r.title} />
+                </td>
               </tr>
             ))}
             {requests.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted">
+                <td colSpan={5} className="px-4 py-8 text-center text-muted">
                   No sourcing requests yet. <Link href="/sourcing/new" className="underline">Post your first one</Link>.
                 </td>
               </tr>

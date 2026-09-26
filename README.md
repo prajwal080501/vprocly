@@ -81,6 +81,11 @@ then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md]
 - Supplier logins use the same Keycloak realm and client as buyers, just with a `platform_supplier_id`
   attribute instead of `tenant_id` — one fewer issuer to manage, same security guarantee (`AuthGuard` forks
   on which claim is present).
+- **Deleting a sourcing request is a genuine delete** (the request, its lines and their notifications), not
+  a soft-delete/cancel — the append-only audit log keeps the history regardless, since it's independent of
+  the live rows. A deleted line's invite link correctly falls through to the existing "invalid or expired"
+  response, so no separate cancelled-state handling was needed. Phase B note: once bidding exists, this
+  needs a guard against deleting a request with an accepted bid.
 
 ## Tests
 

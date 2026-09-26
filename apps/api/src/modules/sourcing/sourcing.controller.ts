@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { RequestContext } from '../../platform/request-context.js';
@@ -38,5 +38,12 @@ export class SourcingController {
   @Roles('buyer', 'requester', 'tenant_admin')
   importBom(@Ctx() ctx: RequestContext, @Body(new ZodPipe(ImportBomRequest)) body: z.infer<typeof ImportBomRequest>) {
     return this.sourcing.importBom(ctx, body);
+  }
+
+  @Delete(':id')
+  @Roles('buyer', 'requester', 'tenant_admin')
+  @HttpCode(204)
+  remove(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string) {
+    return this.sourcing.remove(ctx, id);
   }
 }

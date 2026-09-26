@@ -96,6 +96,43 @@ export class SourcingService {
     });
   }
 
+  /**
+   * A genuine delete, not a soft-delete/cancel: the audit log (append-only, independent of these rows)
+   * keeps the history regardless, and a deleted line's invite link correctly falls through to the existing
+   * "invalid or expired" response -- no separate cancelled-state handling needed there.
+   *
+   * Phase B note: once bidding exists, this needs a guard against deleting a request with an accepted bid
+   * (and a decision on refunding wallet debits for any open bids on it) -- not a concern yet, no bids exist.
+   */
+  async remove(ctx: RequestContext, id: string): Promise<void> {
+    await this.tenantDb.run(ctx, async (tx) => {
+      const [request] = await tx.select().from(sourcingRequests).where(eq(sourcingRequests.id, id));
+      if (!request) throw new NotFoundException();
+
+      const lines = await tx.select({ id: sourcingLines.id }).from(sourcingLines).where(eq(sourcingLines.sourcingRequestId, id));
+      const lineIds = lines.map((l) => l.id);
+      if (lineIds.length > 0) {
+        await tx.delete(sourcingLineNotifications).where(inArray(sourcingLineNotifications.sourcingLineId, lineIds));
+        await tx.delete(sourcingLines).where(eq(sourcingLines.sourcingRequestId, id));
+      }
+      await tx.delete(sourcingRequests).where(eq(sourcingRequests.id, id));
+
+      await this.audit.record(tx, ctx, {
+        action: 'sourcing_request.deleted',
+        entityType: 'sourcing_request',
+        entityId: id,
+        data: { title: request.title, lineCount: lineIds.length },
+      });
+      await this.events.emit(tx, ctx, {
+        type: 'sourcing.sourcing_request_deleted',
+        version: 1,
+        aggregateType: 'sourcing_request',
+        aggregateId: id,
+        payload: { sourcingRequestId: id, lineCount: lineIds.length },
+      });
+    });
+  }
+
   async createManual(ctx: RequestContext, input: CreateManualRequest) {
     const lines: ParsedLine[] = input.lines;
     return this.commit(ctx, input.title, 'manual', lines);

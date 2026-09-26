@@ -166,6 +166,71 @@ describe('sourcing: manual creation, matching, isolation, audit and events', () 
   });
 });
 
+describe('sourcing: delete', () => {
+  async function createRequest(): Promise<{ sourcingRequestId: string; sourcingLineId: string }> {
+    const categoryId = await steelCategoryId();
+    const res = await http
+      .post('/api/sourcing-requests')
+      .set(as('bob'))
+      .send({
+        title: 'To be deleted',
+        lines: [{ description: 'Delete-me item', categoryId, qty: 1, uom: 'NOS', deliveryCity: 'X', deliveryState: 'X' }],
+      })
+      .expect(201);
+    const detail = await http.get(`/api/sourcing-requests/${res.body.sourcingRequestId}`).set(as('bob')).expect(200);
+    return { sourcingRequestId: res.body.sourcingRequestId, sourcingLineId: detail.body.lines[0].id };
+  }
+
+  it('requires auth', async () => {
+    const { sourcingRequestId } = await createRequest();
+    await http.delete(`/api/sourcing-requests/${sourcingRequestId}`).expect(401);
+    // requester (alice's role) is allowed to delete, same as it is allowed to create.
+    await http.delete(`/api/sourcing-requests/${sourcingRequestId}`).set(as('alice')).expect(204);
+  });
+
+  it('another tenant cannot delete it, and it is unaffected', async () => {
+    const { sourcingRequestId } = await createRequest();
+    await http.delete(`/api/sourcing-requests/${sourcingRequestId}`).set(as('carol')).expect(404);
+    await http.get(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(200);
+  });
+
+  it('404s for an unknown id', async () => {
+    await http.delete(`/api/sourcing-requests/${randomUUID()}`).set(as('bob')).expect(404);
+  });
+
+  it('deletes the request, its lines and their notifications, audits it, and a re-fetched invite for it is gone', async () => {
+    const { sourcingRequestId, sourcingLineId } = await createRequest();
+    const invite = await seedInvite(sourcingLineId, `pre-delete-${randomUUID().slice(0, 8)}@example.com`);
+
+    await http.delete(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(204);
+
+    await http.get(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(404);
+    const list = await http.get('/api/sourcing-requests').set(as('bob')).expect(200);
+    expect(list.body.some((r: { id: string }) => r.id === sourcingRequestId)).toBe(false);
+
+    const lines = await withTenant(db, { tenantId: ACME }, (tx) => tx.select().from(sourcingLines).where(eq(sourcingLines.id, sourcingLineId)));
+    expect(lines).toHaveLength(0);
+    const notifications = await withTenant(db, { tenantId: ACME }, (tx) =>
+      tx.select().from(sourcingLineNotifications).where(eq(sourcingLineNotifications.sourcingLineId, sourcingLineId)),
+    );
+    expect(notifications).toHaveLength(0);
+
+    // The audit record survives even though the live rows are gone -- it is append-only and independent.
+    const audit = await http.get('/api/audit').query({ entityType: 'sourcing_request', entityId: sourcingRequestId }).set(as('bob')).expect(200);
+    expect(audit.body.map((a: { action: string }) => a.action)).toEqual(expect.arrayContaining(['sourcing_request.deleted']));
+
+    // The now-deleted line's invite correctly falls through to "invalid or expired" -- no separate
+    // cancelled-state handling needed.
+    await http.get(`/api/invites/${invite}`).expect(404);
+  });
+
+  it('is idempotent-safe: deleting twice 404s the second time rather than double-processing', async () => {
+    const { sourcingRequestId } = await createRequest();
+    await http.delete(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(204);
+    await http.delete(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(404);
+  });
+});
+
 describe('sourcing: BOM import (fixed template)', () => {
   async function uploadCleanCsv(csv: string): Promise<string> {
     const body = Buffer.from(csv);
