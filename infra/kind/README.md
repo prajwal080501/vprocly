@@ -36,6 +36,12 @@ kubectl -n argocd create secret generic repo-vprocly --from-literal=type=git \
   --from-literal=url=git@github.com:prajwal080501/vprocly.git --from-file=sshPrivateKey=/tmp/argocd_deploy_key
 kubectl -n argocd label secret repo-vprocly argocd.argoproj.io/secret-type=repository
 kubectl apply -f infra/argocd/vprocly-local-kind.yaml
+
+# kind has no cloud load balancer, so an Ingress never gets .status.loadBalancer.ingress and Argo CD's
+# default health check leaves it (and the Application) stuck on "Progressing" forever. Override it: an
+# Ingress with at least one rule is healthy here.
+kubectl -n argocd patch configmap argocd-cm --type merge -p '{"data":{"resource.customizations.health.networking.k8s.io_Ingress":"hs = {}\nif obj.spec.rules ~= nil and table.getn(obj.spec.rules) > 0 then\n  hs.status = \"Healthy\"\n  hs.message = \"Ingress has rules (kind has no LoadBalancer to assign an address)\"\n  return hs\nend\nhs.status = \"Progressing\"\nhs.message = \"Waiting for ingress rules\"\nreturn hs\n"}}'
+kubectl -n argocd rollout restart statefulset/argocd-application-controller
 ```
 
 App: http://localhost:58090. Argo CD UI: `kubectl -n argocd port-forward svc/argocd-server 58443:443`, then
