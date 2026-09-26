@@ -18,6 +18,10 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
+          # NextAuth's routes live in the web app; the more specific prefix wins over /api.
+          - path: /api/auth
+            pathType: Prefix
+            backend: { service: { name: {{ include "vprocly.fullname" . }}-web, port: { name: http } } }
           - path: /api
             pathType: Prefix
             backend: { service: { name: {{ include "vprocly.fullname" . }}-api, port: { name: http } } }
