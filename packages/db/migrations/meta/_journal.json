@@ -64,6 +64,13 @@
       "when": 1790420741522,
       "tag": "0008_supplier_members",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790430004089,
+      "tag": "0009_supplier_members_security",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ import {
   sourcingLineNotifications,
   sourcingLines,
   supplierCategories,
+  supplierMembers,
   withTenant,
 } from '@vprocly/db';
 import { and, eq } from 'drizzle-orm';
@@ -152,7 +153,7 @@ describe('sourcing: manual creation, matching, isolation, audit and events', () 
     const email = `matched-${randomUUID().slice(0, 8)}@example.com`;
     const [row] = await db
       .insert(platformSuppliers)
-      .values({ name: 'Auto Match Supplier', gst: 'X', email, city, state: 'TestState', keycloakSubject: `test-${randomUUID()}` })
+      .values({ name: 'Auto Match Supplier', gst: 'X', email, city, state: 'TestState' })
       .returning({ id: platformSuppliers.id });
     const supplierId = row!.id;
     await db.insert(supplierCategories).values({ platformSupplierId: supplierId, categoryId });
@@ -345,6 +346,11 @@ describe('supplier invites: blind identity, signup, wallet grant, replay protect
     // attribute entirely, and AuthGuard's tenant path only ever sees a real tenant this way.
     expect('tenant_id' in claims).toBe(false);
     expect(claims).toMatchObject({ platform_supplier_id: res.body.platformSupplierId, roles: expect.arrayContaining(['supplier']) });
+
+    // The signup creator becomes the company's 'owner' member -- the foundation for later teammate invites
+    // (Phase B), not surfaced anywhere in the UI yet.
+    const members = await db.select().from(supplierMembers).where(eq(supplierMembers.platformSupplierId, res.body.platformSupplierId));
+    expect(members).toEqual([expect.objectContaining({ email, role: 'owner', keycloakSubject: claims.sub })]);
   });
 
   it('is consumed and cannot be replayed', async () => {

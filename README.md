@@ -39,7 +39,7 @@ pnpm dev                               # api :4000, worker, web :3000
 
 Excel service: `cd services/excel && python3 -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/uvicorn app.main:app --port 8001` (or `docker compose -f infra/compose/docker-compose.yml up -d excel`, a containerized copy on port 58001 for CI or a no-setup option; the two never collide).
 
-Dev users (password `password`): `alice` (Acme, requester), `bob` (Acme, approver/buyer/finance/admin), `carol` (Globex, requester/admin). Suppliers self-register through an emailed invite link (see below) — there is no dev supplier user.
+Dev users (password `password`): `alice` (Acme, requester), `bob` (Acme, approver/buyer/finance/admin), `carol` (Globex, requester/admin). Suppliers self-register through an emailed invite link (see below) — there is no dev supplier user. A new buyer company can also create its own account at `/signup` instead of being manually seeded.
 
 | Service | URL |
 |---|---|
@@ -87,6 +87,22 @@ then emails each one an invite link. See [docs/plans/mvp-bidding-marketplace.md]
   response, so no separate cancelled-state handling was needed. Phase B note: once bidding exists, this
   needs a guard against deleting a request with an accepted bid.
 
+## Accounts and organizations
+
+- **Buyer self-signup** (`POST /organizations/signup`, web page `/signup`): creates a new tenant and its
+  first admin login, no manual seeding needed. Creating a brand-new tenant is inherently a cross-tenant
+  operation (there is no tenant context yet), so it goes through a narrow `SECURITY DEFINER` function
+  (`create_tenant`, migration 0007) that races against the slug's unique constraint atomically, the same
+  escape-hatch pattern as the outbox relay and the supplier invite functions. Two companies with the same
+  name get different slugs automatically.
+- **Duplicate email is checked before anything is created**, not left to fail after: signing up (buyer or
+  supplier) with an email that already has a Keycloak login returns `409` immediately, rather than creating
+  an orphaned tenant/supplier row with no working login. Found and fixed by testing this exact case live —
+  see the git history if curious.
+- **Supplier organizations are one-person-per-company today** (`supplier_members`, one 'owner' row created
+  at signup) — the data model already supports more than one member, but there is nowhere to invite a
+  teammate from yet: that needs a supplier login/dashboard, which is Phase B, not built.
+
 ## Tests
 
 `pnpm test` runs integration tests against the dev stack, with real Postgres, Keycloak tokens, NATS, S3, ClamAV and Temporal. The Python tests are in `services/excel` and run with `pytest`.
@@ -102,6 +118,8 @@ What the tests prove:
 - **Workflows:** the upload deadline expires abandoned uploads, stops early when the upload completes, and starts only once per upload.
 - **API security:** roles are enforced, input is validated, and uploads go into quarantine with size and hash checks.
 - **Sourcing marketplace:** category+location matching, BOM template validation (missing/unrecognized columns, row errors, unknown categories — none of which commit anything), the blind-bid rule (asserted directly on the HTTP response body), wallet grant, invite replay protection, and that a signed-up supplier's token carries no `tenant_id`.
+- **Deleting a sourcing request:** cascades to its lines and notifications, survives in the audit log, is idempotent on a second delete (404, not a crash), and respects tenant isolation and roles.
+- **Organization signup:** a fresh tenant is empty and isolated from everyone else's data, two same-named companies get different slugs, and a duplicate email is rejected with `409` before anything is created — not after.
 
 ## Rules every module follows
 

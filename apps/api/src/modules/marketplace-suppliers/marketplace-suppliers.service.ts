@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { categories, consumeSourcingLineInvite, platformSuppliers, resolveSourcingLineInvite, supplierCategories } from '@vprocly/db';
+import { categories, consumeSourcingLineInvite, platformSuppliers, resolveSourcingLineInvite, supplierCategories, supplierMembers } from '@vprocly/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { PlatformDb } from '../../platform/platform-db.service.js';
@@ -92,26 +91,17 @@ export class MarketplaceSuppliersService {
     const [category] = await this.platformDb.run((tx) => tx.select().from(categories).where(eq(categories.id, input.categoryId)));
     if (!category) throw new BadRequestException('Unknown category');
 
-    // The database write commits first (with keycloakSubject left as a placeholder), and only then do we call
-    // out to Keycloak. Doing it the other way round -- Keycloak call inside the transaction -- risks an
-    // orphaned Keycloak login if the transaction later rolls back (a bug already hit and fixed once in this
-    // codebase for document uploads; see documents.service.ts). This way, the worst case if Keycloak is down
-    // is a supplier row stuck at a placeholder keycloakSubject, which is visible and repairable, not a silent
-    // orphan in an external system. There is no automatic retry/reconciliation for that state yet -- Phase B.
-    // The placeholder must be unique (the column has a unique constraint) -- a literal like 'pending' would
-    // collide on the second concurrent signup.
-    const pendingKeycloakSubject = `pending-${randomUUID()}`;
+    // The company profile (platformSuppliers) commits first, and only then do we call out to Keycloak.
+    // Doing it the other way round -- Keycloak call inside the transaction -- risks an orphaned Keycloak
+    // login if the transaction later rolls back (a bug already hit and fixed once in this codebase for
+    // document uploads; see documents.service.ts). This way, the worst case if Keycloak is down is a
+    // company profile with zero members (visible, repairable: retry creates the member), never a login
+    // that exists in Keycloak but is unlinked from any company. No supplierMembers row is written -- and so
+    // no one can log in as this supplier -- until Keycloak actually confirms the account.
     const supplierId = await this.platformDb.run(async (tx) => {
       const [supplier] = await tx
         .insert(platformSuppliers)
-        .values({
-          name: input.name,
-          gst: input.gst,
-          email: invite.email,
-          city: input.city,
-          state: input.state,
-          keycloakSubject: pendingKeycloakSubject,
-        })
+        .values({ name: input.name, gst: input.gst, email: invite.email, city: input.city, state: input.state })
         .returning();
       await tx.insert(supplierCategories).values({ platformSupplierId: supplier!.id, categoryId: input.categoryId });
       await this.wallet.grant(tx, supplier!.id, SIGNUP_GRANT_POINTS, 'signup', supplier!.id);
@@ -130,9 +120,11 @@ export class MarketplaceSuppliersService {
         attributes: { platform_supplier_id: [supplierId] },
         roles: ['supplier'],
       });
-      await this.platformDb.run((tx) => tx.update(platformSuppliers).set({ keycloakSubject }).where(eq(platformSuppliers.id, supplierId)));
+      await this.platformDb.run((tx) =>
+        tx.insert(supplierMembers).values({ platformSupplierId: supplierId, email: invite.email, keycloakSubject, role: 'owner' }),
+      );
     } catch (err) {
-      this.logger.error(`Supplier ${supplierId} was created but its Keycloak login was not; keycloakSubject stays 'pending'`, err as Error);
+      this.logger.error(`Supplier ${supplierId} was created but has no member who can log in yet (Keycloak call failed)`, err as Error);
       throw err;
     }
 
