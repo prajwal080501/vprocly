@@ -1,3 +1,9 @@
+import { Building2Icon, SearchIcon, ShieldCheckIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyStateIcon } from '@/components/illustrations';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import type { Me, Supplier } from '@/lib/types';
 import { CreateSupplierForm } from './create-supplier-form';
@@ -11,55 +17,52 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
   const canCreate = me.user.roles.some((r) => r === 'tenant_admin' || r === 'buyer');
 
   return (
-    <div className="max-w-5xl space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Suppliers</h1>
-          <p className="text-sm text-muted">{suppliers.length} shown</p>
-        </div>
-        <form className="w-full sm:w-64">
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="Search name or code"
-            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-          />
-        </form>
-      </div>
-
-      {canCreate && <CreateSupplierForm />}
-
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-border text-xs uppercase text-muted">
-            <tr>
-              <th className="px-4 py-2.5 font-medium">Code</th>
-              <th className="px-4 py-2.5 font-medium">Name</th>
-              <th className="px-4 py-2.5 font-medium">GSTIN</th>
-              <th className="px-4 py-2.5 font-medium">Source</th>
-              <th className="px-4 py-2.5 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex items-start gap-3"><div className="flex size-10 items-center justify-center rounded-lg border bg-card"><Building2Icon className="size-5" /></div><div><h1 className="text-2xl font-semibold tracking-tight">Suppliers</h1><p className="mt-1 text-sm text-muted-foreground">Manage the approved supplier directory for {me.tenant.name}.</p></div></div>
+        {canCreate && <CreateSupplierForm />}
+      </header>
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Supplier directory</CardTitle>
+          <CardDescription>{suppliers.length} suppliers in this tenant catalog</CardDescription>
+          <CardAction><form className="relative w-72 max-w-full"><SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input name="q" defaultValue={q} placeholder="Search name or code" className="pl-8" /></form></CardAction>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="px-4">Code</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>GSTIN</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
             {suppliers.map((s) => (
-              <tr key={s.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-2.5 font-mono text-xs">{s.code}</td>
-                <td className="px-4 py-2.5">{s.name}</td>
-                <td className="px-4 py-2.5 font-mono text-xs text-muted">{s.taxId ?? '—'}</td>
-                <td className="px-4 py-2.5 text-muted">{s.sourceSystem}</td>
-                <td className="px-4 py-2.5">{s.status}</td>
-              </tr>
+              <TableRow key={s.id}>
+                <TableCell className="px-4 font-mono text-xs">{s.code}</TableCell>
+                <TableCell className="font-medium">{s.name}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{s.taxId ?? '-'}</TableCell>
+                <TableCell className="text-muted-foreground">{s.sourceSystem}</TableCell>
+                <TableCell><Badge variant="secondary"><ShieldCheckIcon data-icon="inline-start" />{s.status}</Badge></TableCell>
+              </TableRow>
             ))}
             {suppliers.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
-                  No suppliers yet.
-                </td>
-              </tr>
+              <TableRow>
+                <TableCell colSpan={5} className="h-40 px-4 text-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <EmptyStateIcon icon={Building2Icon} />
+                    <p className="text-sm text-muted-foreground">No suppliers yet.</p>
+                  </div>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

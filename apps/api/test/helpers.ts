@@ -8,11 +8,13 @@ import { configureApp } from '../src/bootstrap.js';
 process.env.DATABASE_URL ??= 'postgres://vprocly_app:vprocly_app@localhost:55432/vprocly';
 process.env.OIDC_ISSUER ??= 'http://localhost:58080/realms/vprocly';
 process.env.S3_ENDPOINT ??= 'http://localhost:58333';
+process.env.S3_EXCEL_ENDPOINT ??= 'http://host.docker.internal:58333';
 process.env.S3_ACCESS_KEY ??= 'vprocly';
 process.env.S3_SECRET_KEY ??= 'vprocly-secret';
-process.env.EXCEL_SERVICE_URL ??= 'http://localhost:8001';
+process.env.EXCEL_SERVICE_URL ??= 'http://localhost:58001';
 process.env.KEYCLOAK_ADMIN_URL ??= 'http://localhost:58080';
 process.env.KEYCLOAK_ADMIN_CLIENT_SECRET ??= 'vprocly-admin-api-secret';
+process.env.SARVAM_WEBHOOK_SECRET ??= 'test-sarvam-webhook-secret-123456';
 
 export async function createTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

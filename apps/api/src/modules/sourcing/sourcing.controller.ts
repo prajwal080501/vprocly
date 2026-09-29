@@ -3,8 +3,8 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { RequestContext } from '../../platform/request-context.js';
 import { ZodPipe } from '../../platform/zod.pipe.js';
-import { Ctx, Roles } from '../identity-tenancy/index.js';
-import { CreateManualRequest, ImportBomRequest, SourcingService } from './sourcing.service.js';
+import { Ctx, Public, Roles } from '../identity-tenancy/index.js';
+import { CreateManualRequest, ImportBomRequest, InviteToLineInput, SourcingService } from './sourcing.service.js';
 
 @ApiTags('sourcing')
 @ApiBearerAuth()
@@ -14,6 +14,7 @@ export class SourcingController {
 
   /** Category list + fixed BOM column names, for the "add items" and "download template" UI. */
   @Get('bom-template')
+  @Public()
   bomTemplate() {
     return { fields: this.sourcing.bomTemplateFields() };
   }
@@ -45,5 +46,59 @@ export class SourcingController {
   @HttpCode(204)
   remove(@Ctx() ctx: RequestContext, @Param('id', ParseUUIDPipe) id: string) {
     return this.sourcing.remove(ctx, id);
+  }
+
+  @Post(':requestId/lines/:lineId/bids/:bidId/accept')
+  @Roles('buyer', 'tenant_admin')
+  acceptBid(
+    @Ctx() ctx: RequestContext,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+    @Param('bidId', ParseUUIDPipe) bidId: string,
+  ) {
+    return this.sourcing.acceptBid(ctx, requestId, lineId, bidId);
+  }
+
+  @Post(':requestId/lines/:lineId/invite')
+  @Roles('buyer', 'requester', 'tenant_admin')
+  inviteToLine(
+    @Ctx() ctx: RequestContext,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+    @Body(new ZodPipe(InviteToLineInput)) body: InviteToLineInput,
+  ) {
+    return this.sourcing.inviteToLine(ctx, requestId, lineId, body.emails);
+  }
+
+  @Post(':requestId/lines/:lineId/research/retry')
+  @Roles('buyer', 'requester', 'tenant_admin')
+  retryResearch(
+    @Ctx() ctx: RequestContext,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+  ) {
+    return this.sourcing.retryResearch(ctx, requestId, lineId);
+  }
+
+  @Post(':requestId/lines/:lineId/notifications/:notificationId/manual-email')
+  @Roles('buyer', 'requester', 'tenant_admin')
+  manualEmail(
+    @Ctx() ctx: RequestContext,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+    @Param('notificationId', ParseUUIDPipe) notificationId: string,
+  ) {
+    return this.sourcing.manualEmail(ctx, requestId, lineId, notificationId);
+  }
+
+  @Post(':requestId/lines/:lineId/notifications/:notificationId/manual-call')
+  @Roles('buyer', 'requester', 'tenant_admin')
+  manualCall(
+    @Ctx() ctx: RequestContext,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+    @Param('notificationId', ParseUUIDPipe) notificationId: string,
+  ) {
+    return this.sourcing.manualCall(ctx, requestId, lineId, notificationId);
   }
 }

@@ -5,8 +5,11 @@ import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
 
 const Line = z.object({
+  itemCode: z.string().trim().optional(),
+  brandManufacturer: z.string().trim().optional(),
+  hsnMfgCode: z.string().trim().optional(),
   description: z.string().trim().min(1, 'Description is required'),
-  categoryId: z.uuid('Pick a category'),
+  category: z.string().trim().min(1, 'Category is required'),
   qty: z.coerce.number().positive('Quantity must be greater than 0'),
   uom: z.string().trim().min(1, 'Unit is required'),
   deliveryCity: z.string().trim().min(1, 'City is required'),
@@ -36,6 +39,9 @@ export async function createManualSourcingRequest(input: unknown): Promise<Creat
         title: parsed.data.title,
         lines: parsed.data.lines.map((l) => ({
           ...l,
+          itemCode: l.itemCode || undefined,
+          brandManufacturer: l.brandManufacturer || undefined,
+          hsnMfgCode: l.hsnMfgCode || undefined,
           needBy: l.needBy || undefined,
           inviteEmails: l.inviteEmails ? l.inviteEmails.split(/[,;]/).map((e) => e.trim()).filter(Boolean) : undefined,
         })),

@@ -1,22 +1,23 @@
 'use client';
 
 import { signIn, signOut } from 'next-auth/react';
+import { LogInIcon, LogOutIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export function SignInButton({ callbackUrl = '/', label = 'Sign in with your organisation' }: { callbackUrl?: string; label?: string }) {
   return (
-    <button
-      onClick={() => signIn('keycloak', { callbackUrl })}
-      className="w-full rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-accent-fg hover:opacity-90"
-    >
+    <Button onClick={() => signIn('keycloak', { callbackUrl })} className="w-full" size="lg">
+      <LogInIcon data-icon="inline-start" />
       {label}
-    </button>
+    </Button>
   );
 }
 
 export function SignOutButton({ callbackUrl = '/signin' }: { callbackUrl?: string }) {
   return (
-    <button onClick={() => signOut({ callbackUrl })} className="text-sm text-muted hover:text-text">
+    <Button onClick={() => signOut({ callbackUrl })} variant="ghost" size="sm">
+      <LogOutIcon data-icon="inline-start" />
       Sign out
-    </button>
+    </Button>
   );
 }

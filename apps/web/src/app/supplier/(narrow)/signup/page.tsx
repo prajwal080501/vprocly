@@ -1,19 +1,26 @@
 import Link from 'next/link';
 import { publicApi } from '@/lib/public-api';
 import type { Category } from '@/lib/types';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { SceneIllustration } from '@/components/illustrations';
 import { SupplierSignupForm } from './signup-form';
 
 export default async function SupplierSignupPage() {
   const categories = await publicApi<Category[]>('/categories');
 
   return (
-    <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-8">
-      <h1 className="text-xl font-semibold">Become a vProcly supplier</h1>
-      <p className="mt-1 mb-6 text-sm text-muted">Get matched to sourcing requests and start bidding — 1000 points free on signup.</p>
-      <SupplierSignupForm categories={categories} />
-      <p className="mt-4 text-center text-sm text-muted">
-        Already have an account? <Link href="/supplier/signin" className="text-accent hover:underline">Sign in</Link>
-      </p>
-    </div>
+    <Card className="mx-auto w-full max-w-md">
+      <SceneIllustration variant="supplier" className="pt-6" />
+      <CardHeader>
+        <CardTitle>Become a vProcly supplier</CardTitle>
+        <CardDescription>Get matched to sourcing requests and start bidding — 1000 points free on signup.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SupplierSignupForm categories={categories} />
+      </CardContent>
+      <CardFooter className="justify-center text-sm text-muted-foreground">
+        Already have an account? <Link href="/supplier/signin" className="ml-1 font-medium text-foreground underline-offset-4 hover:underline">Sign in</Link>
+      </CardFooter>
+    </Card>
   );
 }

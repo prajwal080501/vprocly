@@ -46,6 +46,42 @@ export const SourcingLineMatchedV1 = z.object({
   invitedNewCount: z.number().int().nonnegative(),
 });
 
+export const SupplierCallRequestedV1 = z.object({
+  voiceCallId: z.uuid(),
+  notificationId: z.uuid(),
+  sourcingLineId: z.uuid(),
+});
+
+export const SupplierEmailRequestedV1 = z.object({
+  notificationId: z.uuid(),
+  sourcingLineId: z.uuid(),
+  reason: z.enum(['no_phone', 'voice_disabled', 'no_answer', 'busy', 'call_failed']),
+});
+
+/** An explicit buyer action ("Email" button on a supplier row) -- always sent for real via the live SMTP
+ *  provider, regardless of EMAIL_DELIVERY_MODE. Never a fallback like SupplierEmailRequestedV1 above, so it
+ *  carries no `reason` and isn't gated by whether a notification already shows as sent. */
+export const SupplierManualEmailRequestedV1 = z.object({
+  notificationId: z.uuid(),
+  sourcingLineId: z.uuid(),
+});
+
+/** Fired when a line has no active supplier match and no prior AI-discovered prospect either -- triggers
+ *  apps/worker/src/consumers/supplier-research-agent.ts. No category name: the consumer looks it up itself
+ *  from categoryId, same as sourcing-invite-mailer.ts already does. */
+export const SourcingLineUnmatchedV1 = z.object({
+  sourcingLineId: z.uuid(),
+  categoryId: z.uuid(),
+  itemCode: z.string().nullable(),
+  description: z.string(),
+  qty: z.string(),
+  uom: z.string(),
+  deliveryCity: z.string(),
+  deliveryState: z.string(),
+  needBy: z.string().nullable(),
+  neededSupplierCount: z.number().int().positive().max(5).optional(),
+});
+
 /** Fires once per request, after every line has been matched -- aggregated totals, so the buyer-summary
  *  email (sourcing-request-summary-mailer.ts) never needs to re-query anything to build its counts. */
 export const SourcingRequestMatchedV1 = z.object({
@@ -62,6 +98,14 @@ export const SupplierRegisteredV1 = z.object({
   grantedPoints: z.number().int().positive(),
 });
 
+export const SourcingBidAcceptedV1 = z.object({
+  sourcingRequestId: z.uuid(),
+  sourcingLineId: z.uuid(),
+  acceptedBidId: z.uuid(),
+  platformSupplierId: z.uuid(),
+  purchaseOrderId: z.uuid(),
+});
+
 export const EventCatalog = {
   'master_data.supplier_created': { 1: SupplierCreatedV1 },
   'documents.upload_requested': { 1: UploadRequestedV1 },
@@ -70,8 +114,13 @@ export const EventCatalog = {
   'sourcing.sourcing_request_created': { 1: SourcingRequestCreatedV1 },
   'sourcing.sourcing_request_deleted': { 1: SourcingRequestDeletedV1 },
   'sourcing.sourcing_line_matched': { 1: SourcingLineMatchedV1 },
+  'sourcing.supplier_call_requested': { 1: SupplierCallRequestedV1 },
+  'sourcing.supplier_email_requested': { 1: SupplierEmailRequestedV1 },
+  'sourcing.supplier_manual_email_requested': { 1: SupplierManualEmailRequestedV1 },
+  'sourcing.sourcing_line_unmatched': { 1: SourcingLineUnmatchedV1 },
   'sourcing.sourcing_request_matched': { 1: SourcingRequestMatchedV1 },
   'marketplace.supplier_registered': { 1: SupplierRegisteredV1 },
+  'sourcing.bid_accepted': { 1: SourcingBidAcceptedV1 },
 } as const;
 
 export type EventType = keyof typeof EventCatalog;

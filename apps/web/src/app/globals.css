@@ -1,31 +1,50 @@
 @import 'tailwindcss';
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-/* Design tokens: light by default, dark via system preference or data-theme. */
+@custom-variant dark (&:is(.dark *));
+
 :root {
-  --bg: #f7f7f5;
-  --surface: #ffffff;
-  --surface-2: #f0f0ed;
-  --border: #e3e3de;
-  --text: #1b1b18;
-  --muted: #6b6b63;
-  --accent: #1f5f4a;
-  --accent-fg: #ffffff;
-  --danger: #b42318;
-  --warning: #b54708;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: #121211;
-    --surface: #1b1b19;
-    --surface-2: #242421;
-    --border: #33332f;
-    --text: #ecece8;
-    --muted: #9b9b92;
-    --accent: #5fb393;
-    --accent-fg: #0d1f18;
-    --danger: #f97066;
-    --warning: #fdb022;
-  }
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.18 0.01 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 260);
+  --primary: oklch(0.57 0.2 255);
+  --primary-foreground: oklch(0.99 0.002 255);
+  --secondary: oklch(0.938 0.006 260);
+  --secondary-foreground: oklch(0.26 0.018 260);
+  --muted: oklch(0.938 0.006 260);
+  --muted-foreground: oklch(0.48 0.012 260);
+  --accent: oklch(0.95 0.025 250);
+  --accent-foreground: oklch(0.34 0.12 255);
+  --destructive: oklch(0.58 0.2 28);
+  --border: oklch(0.865 0.006 260);
+  --input: oklch(0.86 0.006 260);
+  --ring: oklch(0.57 0.2 255);
+  --chart-1: oklch(0.63 0.14 210);
+  --chart-2: oklch(0.58 0.12 160);
+  --chart-3: oklch(0.58 0.11 290);
+  --chart-4: oklch(0.7 0.13 80);
+  --chart-5: oklch(0.62 0.15 25);
+  --radius: 1.1rem;
+  --sidebar: oklch(0.985 0.002 260 / 86%);
+  --sidebar-foreground: oklch(0.18 0.01 260);
+  --sidebar-primary: oklch(0.57 0.2 255);
+  --sidebar-primary-foreground: oklch(0.985 0.002 260);
+  --sidebar-accent: oklch(0.935 0.006 260);
+  --sidebar-accent-foreground: oklch(0.24 0.018 260);
+  --sidebar-border: oklch(0.86 0.006 260);
+  --sidebar-ring: oklch(0.58 0.018 260);
+  --bg: var(--background);
+  --surface: var(--card);
+  --surface-2: var(--muted);
+  --text: var(--foreground);
+  --accent-fg: var(--primary-foreground);
+  --danger: var(--destructive);
+  --warning: oklch(0.66 0.16 70);
+  --font-system: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
 }
 
 @theme inline {
@@ -39,10 +58,385 @@
   --color-accent-fg: var(--accent-fg);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
+  --font-heading: var(--font-system);
+  --font-sans: var(--font-system);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+.dark {
+  --background: oklch(0.18 0.008 260);
+  --foreground: oklch(0.96 0.004 260);
+  --card: oklch(0.23 0.01 260 / 82%);
+  --card-foreground: oklch(0.96 0.004 260);
+  --popover: oklch(0.23 0.01 260 / 92%);
+  --popover-foreground: oklch(0.96 0.004 260);
+  --primary: oklch(0.72 0.15 255);
+  --primary-foreground: oklch(0.16 0.02 255);
+  --secondary: oklch(0.28 0.01 260);
+  --secondary-foreground: oklch(0.96 0.004 260);
+  --muted: oklch(0.28 0.01 260);
+  --muted-foreground: oklch(0.72 0.01 260);
+  --accent: oklch(0.3 0.06 255);
+  --accent-foreground: oklch(0.94 0.02 250);
+  --destructive: oklch(0.7 0.17 25);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.15 255);
+  --sidebar: oklch(0.2 0.01 260 / 84%);
+  --sidebar-foreground: oklch(0.96 0.004 260);
+  --sidebar-primary: oklch(0.9 0.005 260);
+  --sidebar-primary-foreground: oklch(0.19 0.01 260);
+  --sidebar-accent: oklch(0.28 0.01 260);
+  --sidebar-accent-foreground: oklch(0.96 0.004 260);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.72 0.012 260);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  html {
+    @apply font-sans;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  /* Native number-input spinners render with the browser's own chrome, clashing with every other
+     custom-styled control -- hidden everywhere so a plain typed number looks like the rest of the design. */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer components {
+  .dialog-scroll-region {
+    scrollbar-color: color-mix(in oklch, var(--foreground) 28%, transparent) transparent;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+
+  .dialog-scroll-region::-webkit-scrollbar {
+    width: 0.5rem;
+  }
+
+  .dialog-scroll-region::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .dialog-scroll-region::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--foreground) 28%, transparent);
+    background-clip: padding-box;
+  }
+
+  .brand-mark-auth {
+    position: relative;
+    overflow: hidden;
+    transform-origin: 50% 60%;
+    animation: brand-mark-arrive 900ms cubic-bezier(0.2, 0.9, 0.18, 1.12) both;
+  }
+
+  .brand-mark-auth::after {
+    content: "";
+    position: absolute;
+    inset: -45%;
+    background: linear-gradient(115deg, transparent 35%, color-mix(in oklch, var(--primary-foreground) 72%, transparent) 50%, transparent 65%);
+    transform: translateX(-110%) rotate(12deg);
+    animation: brand-mark-sheen 920ms ease-out 180ms both;
+  }
+
+  .brand-mark-auth .brand-mark-dot {
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: brand-dot-pop 460ms cubic-bezier(0.18, 0.9, 0.22, 1.2) both;
+  }
+
+  .brand-mark-auth .brand-mark-dot:nth-of-type(2) {
+    animation-delay: 80ms;
+  }
+
+  .brand-mark-auth .brand-mark-dot:nth-of-type(3) {
+    animation-delay: 160ms;
+  }
+
+  .brand-mark-auth .brand-mark-line,
+  .brand-mark-auth .brand-mark-check {
+    stroke-dasharray: 28;
+    stroke-dashoffset: 28;
+    animation: brand-line-draw 620ms ease-out both;
+  }
+
+  .brand-mark-auth .brand-mark-line:nth-of-type(1) {
+    animation-delay: 120ms;
+  }
+
+  .brand-mark-auth .brand-mark-line:nth-of-type(2) {
+    animation-delay: 200ms;
+  }
+
+  .brand-mark-auth .brand-mark-line:nth-of-type(3) {
+    animation-delay: 280ms;
+  }
+
+  .brand-mark-auth .brand-mark-check {
+    animation-delay: 430ms;
+  }
+
+  .brand-word-auth {
+    animation: brand-word-slide 680ms cubic-bezier(0.2, 0.9, 0.22, 1) 140ms both;
+  }
+
+  .research-stage {
+    perspective: 900px;
+  }
+
+  .research-orbit {
+    position: relative;
+    transform-style: preserve-3d;
+    animation: research-tilt 7s ease-in-out infinite;
+  }
+
+  .research-core {
+    transform: translateZ(28px);
+  }
+
+  .research-node {
+    position: absolute;
+    display: flex;
+    width: 3.25rem;
+    height: 3.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: color-mix(in oklch, var(--background) 84%, var(--primary));
+    color: var(--primary);
+    box-shadow: 0 18px 36px color-mix(in oklch, var(--foreground) 14%, transparent);
+  }
+
+  .research-node-a {
+    animation: research-orbit-a 8s linear infinite;
+  }
+
+  .research-node-b {
+    animation: research-orbit-b 10s linear infinite;
+  }
+
+  .research-node-c {
+    animation: research-orbit-c 9s linear infinite;
+  }
+
+  .research-line-card,
+  .research-supplier-row {
+    transform-style: preserve-3d;
+  }
+}
+
+@keyframes brand-mark-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(0.35rem) rotate(-8deg) scale(0.82);
+    box-shadow: 0 0 0 color-mix(in oklch, var(--primary) 0%, transparent);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(-0.08rem) rotate(3deg) scale(1.08);
+    box-shadow: 0 18px 34px color-mix(in oklch, var(--primary) 28%, transparent);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+@keyframes brand-mark-sheen {
+  0% {
+    transform: translateX(-110%) rotate(12deg);
+  }
+  100% {
+    transform: translateX(110%) rotate(12deg);
+  }
+}
+
+@keyframes brand-dot-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  72% {
+    opacity: 1;
+    transform: scale(1.28);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes brand-line-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes brand-word-slide {
+  0% {
+    opacity: 0;
+    transform: translateX(-0.35rem);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes research-tilt {
+  0%,
+  100% {
+    transform: rotateX(8deg) rotateY(-12deg);
+  }
+  50% {
+    transform: rotateX(-6deg) rotateY(12deg);
+  }
+}
+
+@keyframes research-orbit-a {
+  from {
+    transform: rotateZ(0deg) translateX(6.5rem) rotateZ(0deg) translateZ(34px);
+  }
+  to {
+    transform: rotateZ(360deg) translateX(6.5rem) rotateZ(-360deg) translateZ(34px);
+  }
+}
+
+@keyframes research-orbit-b {
+  from {
+    transform: rotateZ(120deg) translateX(6rem) rotateZ(-120deg) translateZ(-18px);
+  }
+  to {
+    transform: rotateZ(480deg) translateX(6rem) rotateZ(-480deg) translateZ(-18px);
+  }
+}
+
+@keyframes hero-drift-a {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(5%, 7%) scale(1.12);
+  }
+}
+
+@keyframes hero-drift-b {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-7%, -5%) scale(1.08);
+  }
+}
+
+@keyframes hero-drift-c {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-6%, 4%) scale(1.15);
+  }
+}
+
+.hero-drift-a {
+  animation: hero-drift-a 26s ease-in-out infinite;
+}
+
+.hero-drift-b {
+  animation: hero-drift-b 32s ease-in-out infinite;
+}
+
+.hero-drift-c {
+  animation: hero-drift-c 22s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark-auth,
+  .brand-mark-auth::after,
+  .brand-mark-auth .brand-mark-dot,
+  .brand-mark-auth .brand-mark-line,
+  .brand-mark-auth .brand-mark-check,
+  .brand-word-auth {
+    animation: none;
+  }
+
+  .brand-mark-auth .brand-mark-dot {
+    opacity: 1;
+  }
+
+  .brand-mark-auth .brand-mark-line,
+  .brand-mark-auth .brand-mark-check {
+    stroke-dashoffset: 0;
+  }
+
+  .hero-drift-a,
+  .hero-drift-b,
+  .hero-drift-c {
+    animation: none;
+  }
+}
+
+@keyframes research-orbit-c {
+  from {
+    transform: rotateZ(240deg) translateX(5.75rem) rotateZ(-240deg) translateZ(18px);
+  }
+  to {
+    transform: rotateZ(600deg) translateX(5.75rem) rotateZ(-600deg) translateZ(18px);
+  }
 }

@@ -12,7 +12,7 @@ const MAILPIT_API = process.env.MAILPIT_API ?? 'http://localhost:58025';
 const pool = createPool(process.env.DATABASE_URL ?? 'postgres://vprocly_app:vprocly_app@localhost:55432/vprocly');
 const db = createDatabase(pool);
 const transport = nodemailer.createTransport({ host: process.env.SMTP_HOST ?? 'localhost', port: Number(process.env.SMTP_PORT ?? 51025), secure: false });
-const mailers = { rfq: transport, rfqFrom: 'vProcly RFQ <rfq@vprocly.example>', noreply: transport, noreplyFrom: 'vProcly <noreply@vprocly.example>' };
+const mailers = { rfq: transport, rfqFrom: 'vProcly RFQ <rfq@vprocly.example>', noreply: transport, noreplyFrom: 'vProcly <noreply@vprocly.example>', liveRfq: transport, liveRfqFrom: 'vProcly RFQ <rfq@vprocly.example>' };
 const consumer = sourcingRequestSummaryMailer({ db, mailers, publicWebUrl: 'http://localhost:3000' });
 
 afterAll(async () => {

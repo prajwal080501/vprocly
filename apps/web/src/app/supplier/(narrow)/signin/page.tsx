@@ -1,18 +1,27 @@
 import Link from 'next/link';
 import { SignInButton } from '@/components/sign-in-button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { SceneIllustration } from '@/components/illustrations';
 
 export default function SupplierSignInPage() {
   return (
-    <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-8">
-      <h1 className="text-xl font-semibold">vProcly for suppliers</h1>
-      <p className="mt-1 mb-6 text-sm text-muted">See open sourcing opportunities and place bids.</p>
-      <SignInButton callbackUrl="/supplier/dashboard" label="Sign in" />
-      <p className="mt-4 text-center text-sm text-muted">
-        New supplier? <Link href="/supplier/signup" className="text-accent hover:underline">Create your account</Link>
-      </p>
-      <p className="mt-2 text-center text-sm text-muted">
-        Buyer? <Link href="/signin" className="text-accent hover:underline">Sign in here</Link>
-      </p>
-    </div>
+    <Card className="mx-auto w-full max-w-sm">
+      <SceneIllustration variant="supplier" className="pt-6" />
+      <CardHeader>
+        <CardTitle>vProcly for suppliers</CardTitle>
+        <CardDescription>See open sourcing opportunities and place bids.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SignInButton callbackUrl="/supplier/dashboard" label="Sign in" />
+      </CardContent>
+      <CardFooter className="flex flex-col items-stretch gap-2 text-center text-sm text-muted-foreground">
+        <p>
+          New supplier? <Link href="/supplier/signup" className="font-medium text-foreground underline-offset-4 hover:underline">Create your account</Link>
+        </p>
+        <p>
+          Buyer? <Link href="/signin" className="font-medium text-foreground underline-offset-4 hover:underline">Sign in here</Link>
+        </p>
+      </CardFooter>
+    </Card>
   );
 }

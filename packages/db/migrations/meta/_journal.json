@@ -92,6 +92,76 @@
       "when": 1790439083644,
       "tag": "0012_supplier_bidding",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790442683644,
+      "tag": "0013_bid_minimum_order_qty",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790447833738,
+      "tag": "0014_striped_jubilee",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790453306219,
+      "tag": "0015_domain_agnostic_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790460000000,
+      "tag": "0016_supplier_research_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790463600000,
+      "tag": "0017_supplier_voice_calls",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790530921745,
+      "tag": "0018_user_phone",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790605595144,
+      "tag": "0019_closed_nicolaos",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790606909031,
+      "tag": "0020_supplier_invite_email_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790697600000,
+      "tag": "0021_indiamart_categories_and_item_identifiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790697900000,
+      "tag": "0022_predefined_category_catalog",
+      "breakpoints": true
     }
   ]
 }

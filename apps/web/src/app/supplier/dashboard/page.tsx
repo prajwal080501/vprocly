@@ -1,45 +1,33 @@
+import { CheckCircle2Icon, MapPinIcon, WalletCardsIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { supplierApi } from '@/lib/supplier-api';
-import type { OpenLineForSupplier, SupplierMe } from '@/lib/types';
-import { BidForm } from './bid-form';
+import type { OpenLineForSupplier, SupplierBidActivity, SupplierMe } from '@/lib/types';
+import { DashboardView } from './dashboard-view';
 
 export default async function SupplierDashboardPage() {
-  const [me, lines] = await Promise.all([
+  const [me, lines, bids] = await Promise.all([
     supplierApi<SupplierMe>('/supplier/me'),
     supplierApi<OpenLineForSupplier[]>('/supplier/lines'),
+    supplierApi<SupplierBidActivity[]>('/supplier/bids'),
   ]);
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold">{me.name}</h1>
-          <p className="text-sm text-muted">{me.city}, {me.state}</p>
+          <Badge variant="outline" className="mb-2"><CheckCircle2Icon data-icon="inline-start" />Verified supplier</Badge>
+          <h1 className="text-2xl font-semibold tracking-tight">{me.name}</h1>
+          <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground"><MapPinIcon className="size-4" />{me.city}, {me.state}</p>
         </div>
-        <div className="rounded-lg border border-border bg-surface-2 px-4 py-2 text-right">
-          <div className="text-xs text-muted">Wallet balance</div>
-          <div className="text-lg font-semibold">{me.walletBalance} points</div>
-        </div>
-      </div>
-
-      <h2 className="mb-3 text-sm font-medium text-muted">Open sourcing opportunities</h2>
-      {lines.length === 0 && <p className="text-sm text-muted">No open opportunities matched to you yet — check back soon.</p>}
-      <div className="space-y-3">
-        {lines.map((line) => (
-          <div key={line.sourcingLineId} className="rounded-xl border border-border bg-surface p-4">
-            <div className="flex items-baseline justify-between gap-4">
-              <div>
-                {line.itemCode && <p className="font-mono text-xs text-muted">{line.itemCode}</p>}
-                <p className="font-medium">{line.description}</p>
-              </div>
-              <p className="text-sm text-muted whitespace-nowrap">
-                {line.qty} {line.uom}
-                {line.needBy && ` · needed by ${new Date(line.needBy).toLocaleDateString()}`}
-              </p>
-            </div>
-            <BidForm line={line} />
-          </div>
-        ))}
-      </div>
+        <Card className="min-w-56">
+          <CardContent className="flex items-center gap-3 py-3">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-secondary"><WalletCardsIcon className="size-4" /></span>
+            <div><div className="text-xs text-muted-foreground">Wallet balance</div><div className="text-lg font-semibold">{me.walletBalance} points</div></div>
+          </CardContent>
+        </Card>
+      </header>
+      <DashboardView lines={lines} bids={bids} />
     </div>
   );
 }

@@ -13,3 +13,13 @@ __pycache__/
 *.egg-info/
 *.tsbuildinfo
 .DS_Store
+
+# Terraform (infra/terraform) -- state lives in the remote S3 backend; these are local-only.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example.json
+**/tfplan*
+.pnpm-store/

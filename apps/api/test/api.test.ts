@@ -41,7 +41,24 @@ describe('authentication', () => {
     const res = await http.get('/api/me').set(as('bob')).expect(200);
     expect(res.body.tenant).toMatchObject({ id: ACME, slug: 'acme' });
     expect(res.body.user.roles).toEqual(expect.arrayContaining(['buyer', 'tenant_admin']));
+    expect(res.body.user.phone).toBeNull();
     expect(res.headers['x-correlation-id']).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('lets a buyer set their own mobile number, independent of email/displayName (which stay identity-provider-sourced)', async () => {
+    const phone = `+9198${randomUUID().slice(0, 8)}`;
+    const updated = await http.patch('/api/me').set(as('alice')).send({ phone }).expect(200);
+    expect(updated.body.user.phone).toBe(phone);
+
+    const refetched = await http.get('/api/me').set(as('alice')).expect(200);
+    expect(refetched.body.user.phone).toBe(phone);
+    // A subsequent request re-runs the JIT-provisioning upsert (email/displayName), which must not clobber it.
+    const stillThere = await http.get('/api/me').set(as('alice')).expect(200);
+    expect(stillThere.body.user.phone).toBe(phone);
+
+    await http.patch('/api/me').set(as('alice')).send({ phone: null }).expect(200);
+    const cleared = await http.get('/api/me').set(as('alice')).expect(200);
+    expect(cleared.body.user.phone).toBeNull();
   });
 });
 

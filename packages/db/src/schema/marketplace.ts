@@ -1,4 +1,4 @@
-import { bigserial, integer, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { bigserial, boolean, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid, vector } from 'drizzle-orm/pg-core';
 import { id } from './columns.js';
 
 /**
@@ -7,11 +7,18 @@ import { id } from './columns.js';
  * platformSupplierId), not in the database. Use `db.transaction(...)` directly here, never `withTenant`.
  */
 
-/** Fixed taxonomy: buyers and suppliers both pick from this list, which keeps category matching reliable.
- *  Read-only via the API; seeded by migration. */
+/** An open-ended, self-growing vocabulary -- not a fixed list. A new category name is only ever created
+ *  by `CategoryResolverService` (apps/api/.../category-resolver.service.ts), which embeds the free text a
+ *  buyer or supplier typed and reuses an existing row if one is already close enough in meaning, so the
+ *  same underlying idea spelled two different ways ("Steel Products" vs "Steel & Metal Products") collapses
+ *  onto one row instead of sprawling. `embedding` is nullable: rows seeded before pgvector existed, or
+ *  created while the embeddings API was unavailable (see the resolver's exact-match fallback), have none
+ *  yet and are matched by name only until backfilled. */
 export const categories = pgTable('categories', {
   id: id(),
   name: text('name').notNull().unique(),
+  isPredefined: boolean('is_predefined').notNull().default(false),
+  embedding: vector('embedding', { dimensions: 768 }),
 });
 
 /** A supplier company profile. Who can log in and act as it lives in supplierMembers below, not here --
@@ -20,7 +27,10 @@ export const categories = pgTable('categories', {
 export const platformSuppliers = pgTable('platform_suppliers', {
   id: id(),
   name: text('name').notNull(),
-  gst: text('gst').notNull(),
+  // Nullable: an AI-discovered 'prospect' row (see status below) has no GST until it completes real signup
+  // and gets promoted -- enforced by the platform_suppliers_gst_required_unless_prospect CHECK, migration
+  // 0016, not just this looser TS type.
+  gst: text('gst'),
   email: text('email').notNull().unique(),
   phone: text('phone'),
   city: text('city').notNull(),
@@ -28,8 +38,24 @@ export const platformSuppliers = pgTable('platform_suppliers', {
   // Nullable: only the self-serve signup (no invite) collects this today; the older invite-gated signup
   // doesn't ask for it and there's no reason to force a backfill on those rows.
   country: text('country'),
+  // 'active' (a real, signed-up company) | 'prospect' (found by AI research, invited, never yet signed up
+  // -- see apps/worker/src/consumers/supplier-research-agent.ts). The existing supplier-matching query
+  // already filters to 'active', so a prospect is never auto-matched or shown as a real bidder until it
+  // signs up and gets promoted in place (marketplace-suppliers.service.ts's signup/selfSignup).
   status: text('status').notNull().default('active'),
+  // Set only for AI-discovered prospects: place_id, source URLs, the search query used, discovered-at.
+  // Left untouched on promotion to 'active' -- a permanent record of how this supplier was first found.
+  discoveryMetadata: jsonb('discovery_metadata'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Successful supplier research runs. The cost guard in sourcing.service.ts uses positive-result rows to
+ * avoid repeating paid Gemini+Places research while empty and failed searches remain retryable. */
+export const supplierResearchRuns = pgTable('supplier_research_runs', {
+  id: id(),
+  categoryId: uuid('category_id').notNull().references(() => categories.id),
+  triggeredAt: timestamp('triggered_at', { withTimezone: true }).notNull().defaultNow(),
+  candidatesFound: integer('candidates_found').notNull(),
 });
 
 /**

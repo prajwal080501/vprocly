@@ -2,6 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Trash2Icon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { deleteSourcingRequest } from './actions';
 
 export function DeleteSourcingRequestButton({ id, title }: { id: string; title: string }) {
@@ -20,11 +22,12 @@ export function DeleteSourcingRequestButton({ id, title }: { id: string; title: 
   }
 
   return (
-    <div>
-      <button type="button" onClick={handleClick} disabled={pending} className="text-sm text-muted hover:text-danger disabled:opacity-50">
-        {pending ? 'Deleting…' : 'Delete'}
-      </button>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+    <div className="flex flex-col items-end gap-1">
+      <Button type="button" onClick={handleClick} disabled={pending} variant="destructive" size="sm">
+        <Trash2Icon data-icon="inline-start" />
+        {pending ? 'Deleting' : 'Delete'}
+      </Button>
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

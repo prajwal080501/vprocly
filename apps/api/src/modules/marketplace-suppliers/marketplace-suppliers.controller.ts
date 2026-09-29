@@ -1,21 +1,14 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { Public, SupplierAuthGuard, SupplierCtx, type SupplierRequestContext } from '../identity-tenancy/index.js';
 import { ZodPipe } from '../../platform/zod.pipe.js';
-import { MarketplaceSuppliersService, PlaceBidInput, SignupInput, SupplierSelfSignup } from './marketplace-suppliers.service.js';
+import { MarketplaceSuppliersService, PlaceBidInput, SignupInput, SupplierSelfSignup, UpdateSupplierProfile } from './marketplace-suppliers.service.js';
 
 @ApiTags('marketplace')
 @Controller()
 export class MarketplaceSuppliersController {
   constructor(private readonly service: MarketplaceSuppliersService) {}
-
-  /** Fixed taxonomy for the buyer's line-item form and the supplier signup form. No auth needed to read it. */
-  @Get('categories')
-  @Public()
-  categories() {
-    return this.service.listCategories();
-  }
 
   @Get('invites/:token')
   @Public()
@@ -43,11 +36,25 @@ export class MarketplaceSuppliersController {
     return this.service.me(ctx);
   }
 
+  @Patch('supplier/me')
+  @Public()
+  @UseGuards(SupplierAuthGuard)
+  updateMe(@SupplierCtx() ctx: SupplierRequestContext, @Body(new ZodPipe(UpdateSupplierProfile)) body: UpdateSupplierProfile) {
+    return this.service.updateMe(ctx, body);
+  }
+
   @Get('supplier/lines')
   @Public()
   @UseGuards(SupplierAuthGuard)
   openLines(@SupplierCtx() ctx: SupplierRequestContext) {
     return this.service.openLines(ctx);
+  }
+
+  @Get('supplier/bids')
+  @Public()
+  @UseGuards(SupplierAuthGuard)
+  bids(@SupplierCtx() ctx: SupplierRequestContext) {
+    return this.service.bidActivity(ctx);
   }
 
   @Post('supplier/lines/:lineId/bids')

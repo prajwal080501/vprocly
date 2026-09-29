@@ -44,6 +44,10 @@ export const users = pgTable(
     subject: text('subject').notNull(),
     email: text('email'),
     displayName: text('display_name'),
+    // Self-service contact field, set via PATCH /me -- unlike email/displayName above, never touched by the
+    // JIT-provisioning upsert (tenant-db.service.ts's resolveUser), so it persists across logins untouched.
+    // No functional consumer yet (buyers aren't called); added for profile parity with platformSuppliers.phone.
+    phone: text('phone'),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     ...timestamps,
   },

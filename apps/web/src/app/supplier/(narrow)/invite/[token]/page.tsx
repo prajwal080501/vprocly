@@ -1,18 +1,21 @@
 import Link from 'next/link';
 import { publicApi, PublicApiError } from '@/lib/public-api';
 import type { Category, InviteLineSummary, InviteView } from '@/lib/types';
+import { Card, CardContent } from '@/components/ui/card';
 import { SignupForm } from './signup-form';
 
 function LineSummary({ line }: { line: InviteLineSummary }) {
   return (
-    <div className="mb-4 rounded-xl border border-border bg-surface-2 p-4 text-sm">
-      {line.itemCode && <p className="font-mono text-xs text-muted">{line.itemCode}</p>}
-      <p className="font-medium">{line.description}</p>
-      <p className="text-muted">
-        {line.qty} {line.uom} · delivered to {line.deliveryCity}, {line.deliveryState}
-        {line.needBy && ` · needed by ${new Date(line.needBy).toLocaleDateString()}`}
-      </p>
-    </div>
+    <Card className="mb-4 bg-muted/40">
+      <CardContent className="text-sm">
+        {line.itemCode && <p className="font-mono text-xs text-muted-foreground">{line.itemCode}</p>}
+        <p className="font-medium">{line.description}</p>
+        <p className="text-muted-foreground">
+          {line.qty} {line.uom} · delivered to {line.deliveryCity}, {line.deliveryState}
+          {line.needBy && ` · needed by ${new Date(line.needBy).toLocaleDateString()}`}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -24,35 +27,36 @@ export default async function SupplierInvitePage({ params }: { params: Promise<{
     view = await publicApi<InviteView>(`/invites/${token}`);
   } catch (err) {
     if (err instanceof PublicApiError && err.status === 404) {
-      return <p className="text-center text-sm text-muted">This invite link is invalid or has expired.</p>;
+      return <p className="text-center text-sm text-muted-foreground">This invite link is invalid or has expired.</p>;
     }
     throw err;
   }
 
   if (view.status === 'consumed') {
-    return <p className="text-center text-sm text-muted">This invite has already been used.</p>;
+    return <p className="text-center text-sm text-muted-foreground">This invite has already been used.</p>;
   }
 
   if (view.status === 'already_registered') {
     return (
       <div>
-        <h1 className="mb-4 text-xl font-semibold">New sourcing opportunity</h1>
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight">New sourcing opportunity</h1>
         <LineSummary line={view.line} />
-        <p className="text-center text-sm text-muted">
+        <p className="text-center text-sm text-muted-foreground">
           You&apos;re already registered ({view.email}).{' '}
-          <Link href="/supplier/signin" className="text-accent hover:underline">Log in</Link> to view and bid.
+          <Link href="/supplier/signin" className="font-medium text-foreground underline-offset-4 hover:underline">Log in</Link> to view and bid.
         </p>
       </div>
     );
   }
 
   const categories = await publicApi<Category[]>('/categories');
+  const defaultCategoryName = categories.find((c) => c.id === view.line.categoryId)?.name ?? '';
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold">New sourcing opportunity</h1>
+      <h1 className="mb-4 text-2xl font-semibold tracking-tight">New sourcing opportunity</h1>
       <LineSummary line={view.line} />
-      <SignupForm token={token} email={view.email} categories={categories} defaultCategoryId={view.line.categoryId} />
+      <SignupForm token={token} email={view.email} categories={categories} defaultCategoryName={defaultCategoryName} />
     </div>
   );
 }

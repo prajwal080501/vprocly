@@ -9,11 +9,16 @@ import { buildConsumers } from './consumers/index.js';
 import { createMailers } from './mailer.js';
 import { ObjectStorage } from './object-storage.js';
 import { relayOnce } from './relay.js';
+import { GeminiPlacesResearchClient } from './research/gemini-places-client.js';
 import { ensureStreams } from './streams.js';
 import { createDocumentActivities } from './temporal/activities/documents.js';
 import { createTemporalWorker } from './temporal/worker.js';
+import { SarvamCampaignClient } from './voice/sarvam-campaign-client.js';
+import { SarvamVoiceCallClient } from './voice/sarvam-client.js';
 
 const config = loadConfig();
+console.log(JSON.stringify({ msg: 'email delivery configured', mode: config.EMAIL_DELIVERY_MODE }));
+console.log(JSON.stringify({ msg: 'voice delivery configured', mode: config.VOICE_DELIVERY_MODE }));
 const pool = createPool(config.DATABASE_URL, 5);
 const db = createDatabase(pool);
 const storage = new ObjectStorage(config);
@@ -30,6 +35,64 @@ const { worker: temporalWorker, connection: temporalWorkerConnection } = await c
 });
 const temporalRun = temporalWorker.run();
 
+const research =
+  config.GEMINI_API_KEY && config.GOOGLE_PLACES_API_KEY
+    ? new GeminiPlacesResearchClient({ geminiApiKey: config.GEMINI_API_KEY, geminiModel: config.GEMINI_MODEL, placesApiKey: config.GOOGLE_PLACES_API_KEY })
+    : undefined;
+if (!research) console.log(JSON.stringify({ msg: 'AI supplier discovery disabled: GEMINI_API_KEY/GOOGLE_PLACES_API_KEY not set' }));
+
+// Constructed whenever Sarvam is configured, regardless of VOICE_DELIVERY_MODE -- supplier-outreach-router.ts
+// still reads voiceMode separately to decide the *automatic* call-vs-email choice. A manual call (from the
+// API's manualCall endpoint) needs this client to exist even while the automatic pipeline stays in capture.
+const voice = config.SARVAM_API_KEY && config.SARVAM_ORG_ID && config.SARVAM_WORKSPACE_ID && config.SARVAM_APP_ID && config.SARVAM_CONNECTION_ID && config.SARVAM_AGENT_PHONE_NUMBER && config.SARVAM_WEBHOOK_SECRET
+  ? new SarvamVoiceCallClient({
+      apiKey: config.SARVAM_API_KEY!,
+      orgId: config.SARVAM_ORG_ID!,
+      workspaceId: config.SARVAM_WORKSPACE_ID!,
+      appId: config.SARVAM_APP_ID!,
+      appVersion: config.SARVAM_APP_VERSION,
+      connectionId: config.SARVAM_CONNECTION_ID!,
+      agentPhoneNumber: config.SARVAM_AGENT_PHONE_NUMBER!,
+      webhookUrl: `${config.PUBLIC_API_URL}/api/webhooks/sarvam/instant-outbound/${encodeURIComponent(config.SARVAM_WEBHOOK_SECRET!)}`,
+    })
+  : undefined;
+if (!voice) console.log(JSON.stringify({ msg: 'Voice calling disabled: Sarvam config incomplete (both automatic and manual calls are unavailable)' }));
+
+// The automatic call-on-match path (supplier-outreach-router.ts) streams matched suppliers into one
+// long-lived Sarvam campaign instead of placing an Instant Outbound call per match -- see Phase F. Needs the
+// same Sarvam config as `voice` above, so it's only constructed when that's already present.
+const campaign = voice && config.VOICE_DELIVERY_MODE === 'live'
+  ? new SarvamCampaignClient({
+      apiKey: config.SARVAM_API_KEY!,
+      orgId: config.SARVAM_ORG_ID!,
+      workspaceId: config.SARVAM_WORKSPACE_ID!,
+      appId: config.SARVAM_APP_ID!,
+      appVersion: config.SARVAM_APP_VERSION,
+      connectionId: config.SARVAM_CONNECTION_ID!,
+      agentPhoneNumber: config.SARVAM_AGENT_PHONE_NUMBER!,
+      webhookUrl: `${config.PUBLIC_API_URL}/api/webhooks/sarvam/instant-outbound/${encodeURIComponent(config.SARVAM_WEBHOOK_SECRET!)}`,
+      campaignName: config.SARVAM_CAMPAIGN_NAME,
+      attemptsPerSecond: config.SARVAM_CAMPAIGN_ATTEMPTS_PER_SECOND,
+      maxRetries: config.SARVAM_CAMPAIGN_MAX_RETRIES,
+      retryIntervalMinutes: config.SARVAM_CAMPAIGN_RETRY_INTERVAL_MINUTES,
+      timezone: config.SARVAM_CAMPAIGN_TIMEZONE,
+      startTime: config.SARVAM_CAMPAIGN_START_TIME,
+      endTime: config.SARVAM_CAMPAIGN_END_TIME,
+      days: config.SARVAM_CAMPAIGN_DAYS.split(',').map((d) => d.trim()),
+    })
+  : undefined;
+// A Sarvam outage/misconfiguration here must degrade to "automatic calling is unavailable", never crash the
+// whole worker -- every other consumer (mailers, document scanner, research) has nothing to do with this.
+let campaignId: string | undefined;
+if (campaign) {
+  try {
+    campaignId = (await campaign.ensureCampaign()).campaignId;
+    console.log(JSON.stringify({ msg: 'Sarvam campaign ready', campaignId }));
+  } catch (err) {
+    console.error(JSON.stringify({ msg: 'Sarvam campaign setup failed; automatic calling disabled this run', error: String(err) }));
+  }
+}
+
 const consumers = buildConsumers({
   db,
   storage,
@@ -39,6 +102,12 @@ const consumers = buildConsumers({
   uploadDeadlineSeconds: config.UPLOAD_DEADLINE_SECONDS,
   mailers: createMailers(config),
   publicWebUrl: config.PUBLIC_WEB_URL,
+  research,
+  supplierResearchMaxCandidates: config.SUPPLIER_RESEARCH_MAX_CANDIDATES,
+  voiceMode: config.VOICE_DELIVERY_MODE,
+  voice,
+  campaign,
+  campaignId,
 });
 const running = await Promise.all(consumers.map((def) => runConsumer(nc, js, db, def)));
 

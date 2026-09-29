@@ -1,3 +1,5 @@
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import type { Category } from '@/lib/types';
 import { NewSourcingTabs } from './new-sourcing-tabs';
@@ -5,12 +7,17 @@ import { NewSourcingTabs } from './new-sourcing-tabs';
 export default async function NewSourcingPage() {
   const categories = await api<Category[]>('/categories');
   return (
-    <div className="max-w-4xl space-y-2">
-      <h1 className="text-2xl font-semibold">New sourcing request</h1>
-      <p className="mb-4 text-sm text-muted">
-        We&apos;ll match your items to suppliers by category and location, and invite them to bid.
-      </p>
-      <NewSourcingTabs categories={categories} />
+    <div className="mx-auto max-w-5xl">
+      <Card>
+        <CardHeader>
+          <Badge variant="outline" className="w-fit">Supplier matching</Badge>
+          <CardTitle>New sourcing request</CardTitle>
+          <CardDescription>Match items to suppliers by category and location, then invite them to bid.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <NewSourcingTabs categories={categories} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

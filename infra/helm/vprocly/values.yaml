@@ -44,10 +44,21 @@ config:
   smtpNoreplyHost: mail.privateemail.com
   smtpNoreplyPort: 587
   smtpNoreplyFrom: "vProcly <noreply@vprocly.com>"
+  emailDeliveryMode: live
+  # Keep capture until the Sarvam app, telephony connection, public webhook, and consent/compliance review
+  # are ready. Live credentials belong in existingSecret, never this values file.
+  voiceDeliveryMode: capture
+  sarvamOrgId: ""
+  sarvamWorkspaceId: ""
+  sarvamAppId: ""
+  sarvamAppVersion: 1
+  sarvamConnectionId: ""
+  sarvamAgentPhoneNumber: ""
 
 # Secret must provide: DATABASE_URL (app role), DATABASE_ADMIN_URL (migrations/owner role), S3_ACCESS_KEY,
 # S3_SECRET_KEY, NEXTAUTH_SECRET, OIDC_CLIENT_SECRET, KEYCLOAK_ADMIN_CLIENT_SECRET, SMTP_USER, SMTP_PASS,
-# NOREPLY_SMTP_USER, NOREPLY_SMTP_PASS. Manage it with External Secrets / Vault.
+# NOREPLY_SMTP_USER, NOREPLY_SMTP_PASS. Live voice delivery also requires SARVAM_API_KEY and
+# SARVAM_WEBHOOK_SECRET. Manage it with External Secrets / Vault.
 existingSecret: vprocly-secrets
 
 migrations:

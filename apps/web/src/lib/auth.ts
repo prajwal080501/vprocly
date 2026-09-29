@@ -7,6 +7,23 @@ const issuer = process.env.OIDC_ISSUER!;
 // token's `iss` always use the public issuer.
 const internalIssuer = process.env.OIDC_INTERNAL_ISSUER ?? issuer;
 
+type AccountKind = 'buyer' | 'supplier';
+
+function accountKind(accessToken: string | undefined): AccountKind | undefined {
+  if (!accessToken) return undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1]!, 'base64url').toString('utf8')) as {
+      tenant_id?: string;
+      platform_supplier_id?: string;
+    };
+    if (payload.platform_supplier_id) return 'supplier';
+    if (payload.tenant_id) return 'buyer';
+  } catch {
+    // Token verification remains the API's responsibility; this hint only chooses the correct route group.
+  }
+  return undefined;
+}
+
 async function refresh(token: JWT): Promise<JWT> {
   const res = await fetch(`${internalIssuer}/protocol/openid-connect/token`, {
     method: 'POST',
@@ -22,6 +39,7 @@ async function refresh(token: JWT): Promise<JWT> {
   return {
     ...token,
     accessToken: t.access_token,
+    accountKind: accountKind(t.access_token),
     refreshToken: t.refresh_token ?? token.refreshToken,
     expiresAt: Math.floor(Date.now() / 1000) + t.expires_in,
     error: undefined,
@@ -45,16 +63,19 @@ export const authOptions: NextAuthOptions = {
         return {
           ...token,
           accessToken: account.access_token,
+          accountKind: accountKind(account.access_token),
           refreshToken: account.refresh_token,
           expiresAt: account.expires_at,
         };
       }
-      if (token.expiresAt && Date.now() / 1000 < token.expiresAt - 30) return token;
+      if (token.expiresAt && Date.now() / 1000 < token.expiresAt - 30) {
+        return token.accountKind ? token : { ...token, accountKind: accountKind(token.accessToken) };
+      }
       return refresh(token);
     },
     // Tokens stay in the encrypted cookie; the browser session only gets identity and error state.
     async session({ session, token }) {
-      return { ...session, error: token.error };
+      return { ...session, error: token.error, accountKind: token.accountKind };
     },
   },
 };
@@ -62,6 +83,7 @@ export const authOptions: NextAuthOptions = {
 declare module 'next-auth' {
   interface Session {
     error?: string;
+    accountKind?: AccountKind;
   }
 }
 
@@ -71,5 +93,6 @@ declare module 'next-auth/jwt' {
     refreshToken?: string;
     expiresAt?: number;
     error?: string;
+    accountKind?: AccountKind;
   }
 }

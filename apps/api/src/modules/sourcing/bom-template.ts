@@ -7,6 +7,8 @@ import { z } from 'zod';
  */
 export const BOM_TEMPLATE_FIELDS = [
   { key: 'itemCode', label: 'Item Code', aliases: ['item code', 'code'], required: false },
+  { key: 'brandManufacturer', label: 'Brand / Manufacturer', aliases: ['brand / manufacturer', 'brand', 'manufacturer', 'make'], required: false },
+  { key: 'hsnMfgCode', label: 'HSN / MFG Code', aliases: ['hsn / mfg code', 'hsn code', 'mfg code', 'manufacturer code', 'part number'], required: false },
   { key: 'description', label: 'Description', aliases: ['description', 'item description', 'material description'], required: true },
   { key: 'category', label: 'Category', aliases: ['category'], required: true },
   { key: 'qty', label: 'Qty', aliases: ['qty', 'quantity', 'required qty'], required: true },
@@ -39,6 +41,8 @@ export function missingRequiredColumns(mapping: Partial<Record<BomFieldKey, numb
 
 const RawBomLine = z.object({
   itemCode: z.string().trim().optional(),
+  brandManufacturer: z.string().trim().optional(),
+  hsnMfgCode: z.string().trim().optional(),
   description: z.string().trim().min(1),
   category: z.string().trim().min(1),
   qty: z.coerce.number().positive(),

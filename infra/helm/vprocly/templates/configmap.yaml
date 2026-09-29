@@ -31,6 +31,7 @@ data:
   # Used to build supplier invite links in emails -- must be the real public URL, not the code's
   # localhost default, or invite links sent in production would be unusable.
   PUBLIC_WEB_URL: {{ .Values.config.publicUrl | quote }}
+  PUBLIC_API_URL: {{ .Values.config.publicUrl | quote }}
   API_URL: "http://{{ include "vprocly.fullname" . }}-api:4000/api"
   EXCEL_SERVICE_URL: "http://{{ include "vprocly.fullname" . }}-excel:8001"
   {{- with .Values.config.s3ExcelEndpoint }}
@@ -44,3 +45,21 @@ data:
   NOREPLY_SMTP_HOST: {{ .Values.config.smtpNoreplyHost | quote }}
   NOREPLY_SMTP_PORT: {{ .Values.config.smtpNoreplyPort | quote }}
   NOREPLY_SMTP_FROM: {{ .Values.config.smtpNoreplyFrom | quote }}
+  EMAIL_DELIVERY_MODE: {{ .Values.config.emailDeliveryMode | quote }}
+  VOICE_DELIVERY_MODE: {{ .Values.config.voiceDeliveryMode | quote }}
+  {{- with .Values.config.sarvamOrgId }}
+  SARVAM_ORG_ID: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.sarvamWorkspaceId }}
+  SARVAM_WORKSPACE_ID: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.sarvamAppId }}
+  SARVAM_APP_ID: {{ . | quote }}
+  {{- end }}
+  SARVAM_APP_VERSION: {{ .Values.config.sarvamAppVersion | quote }}
+  {{- with .Values.config.sarvamConnectionId }}
+  SARVAM_CONNECTION_ID: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.sarvamAgentPhoneNumber }}
+  SARVAM_AGENT_PHONE_NUMBER: {{ . | quote }}
+  {{- end }}

@@ -1,0 +1,11 @@
+vprocly.com, www.vprocly.com {
+	reverse_proxy web:3000
+}
+
+api.vprocly.com {
+	reverse_proxy api:4000
+}
+
+auth.vprocly.com {
+	reverse_proxy keycloak:8080
+}

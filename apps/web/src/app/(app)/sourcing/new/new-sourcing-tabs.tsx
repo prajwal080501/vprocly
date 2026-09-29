@@ -1,28 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { ClipboardListIcon, FileSpreadsheetIcon } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Category } from '@/lib/types';
 import { BomUploadForm } from './bom-upload-form';
 import { ManualEntryForm } from './manual-entry-form';
 
 export function NewSourcingTabs({ categories }: { categories: Category[] }) {
-  const [tab, setTab] = useState<'manual' | 'bom'>('manual');
-  const tabClass = (active: boolean) =>
-    `rounded-md px-4 py-2 text-sm font-medium ${active ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted hover:text-text'}`;
-
   return (
-    <div className="space-y-5">
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setTab('manual')} className={tabClass(tab === 'manual')}>
+    <Tabs defaultValue="manual" className="gap-5">
+      <TabsList className="mt-5 w-full sm:w-fit">
+        <TabsTrigger value="manual">
+          <ClipboardListIcon data-icon="inline-start" />
           Add items manually
-        </button>
-        <button type="button" onClick={() => setTab('bom')} className={tabClass(tab === 'bom')}>
+        </TabsTrigger>
+        <TabsTrigger value="bom">
+          <FileSpreadsheetIcon data-icon="inline-start" />
           Upload a BOM file
-        </button>
-      </div>
-      <div className="rounded-xl border border-border bg-surface p-5">
-        {tab === 'manual' ? <ManualEntryForm categories={categories} /> : <BomUploadForm />}
-      </div>
-    </div>
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="manual">
+        <ManualEntryForm categories={categories} />
+      </TabsContent>
+      <TabsContent value="bom">
+        <BomUploadForm />
+      </TabsContent>
+    </Tabs>
   );
 }

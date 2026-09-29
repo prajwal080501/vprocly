@@ -65,8 +65,8 @@ request" page) or entering them manually — and the platform matches suppliers 
 then emails each one an invite link. Suppliers can also self-serve signup with no invite (`POST /supplier-signup`,
 web page `/supplier/signup`), log in (`/supplier/signin`), see their matched open lines on a dashboard
 (`/supplier/dashboard`), and place a price-quote bid that debits their wallet. See
-[docs/plans/mvp-bidding-marketplace.md](docs/plans/mvp-bidding-marketplace.md) for the full design and what's
-still deferred (buyer bid review/accept, identity reveal on accept — Phase C).
+[docs/plans/mvp-bidding-marketplace.md](docs/plans/mvp-bidding-marketplace.md) for the full design. Marketplace
+Phases A-C are complete, including buyer award selection and winner-only identity reveal.
 
 - **Categories are a fixed, global, ad hoc-growing list** (29 as of migration 0010: the original 12
   generic-manufacturing ones plus 17 automotive ones added after a real automotive BOM import surfaced the
@@ -86,7 +86,7 @@ still deferred (buyer bid review/accept, identity reveal on accept — Phase C).
   pattern already used for the outbox relay.
 - **Suppliers are platform-level, not tenant-scoped** (`platform_suppliers`, no RLS — see
   `packages/db/src/schema/marketplace.ts`): the same supplier bids across many buyer tenants. A buyer's own
-  `suppliers` vendor-master table stays private and gets a row once a bid is accepted (Phase C).
+  `suppliers` vendor-master table stays private and gets a linked row once a bid is accepted.
 - **Invite tokens are generated only when the email is actually sent** (in the worker, not the API): a raw
   token never sits in the durable, replayable outbox/event payload — only its hash is ever persisted.
 - **Wallet**: 1000 points free on signup, no real-money top-up yet (flagged legal/regulatory risk, see the

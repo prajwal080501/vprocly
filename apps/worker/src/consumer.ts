@@ -17,6 +17,8 @@ export type ConsumerDefinition<P = void> = {
   prepare?: (event: EventEnvelope) => Promise<P>;
   /** Database effects; commits atomically with the idempotency record. */
   handler: (tx: Tx, event: EventEnvelope, prepared: P) => Promise<void>;
+  /** Records operational failure state outside the rolled-back handler transaction. */
+  onError?: (event: EventEnvelope, error: unknown) => Promise<void>;
   /** Cleanup after commit (also on duplicate delivery), e.g. deleting a temporary object. Must be idempotent. */
   afterCommit?: (event: EventEnvelope, prepared: P) => Promise<void>;
 };
@@ -103,6 +105,22 @@ async function processMessage(js: JetStreamClient, db: Database, def: AnyConsume
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     const attempt = msg.info.deliveryCount;
+    try {
+      await def.onError?.(parsed.data, err);
+    } catch (hookError) {
+      console.error(JSON.stringify({ msg: 'consumer error hook failed', consumer: def.name, eventId: parsed.data.id, error: String(hookError) }));
+    }
+    console.error(
+      JSON.stringify({
+        msg: 'consumer failed',
+        consumer: def.name,
+        eventId: parsed.data.id,
+        eventType: parsed.data.type,
+        attempt,
+        maxDeliver,
+        error: reason,
+      }),
+    );
     if (attempt >= maxDeliver) {
       await deadLetter(js, def, msg, reason);
     } else {

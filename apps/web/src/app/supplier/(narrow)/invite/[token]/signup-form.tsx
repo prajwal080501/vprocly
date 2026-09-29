@@ -1,15 +1,19 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { CategoryPicker } from '@/components/category-picker';
+import { Card, CardContent } from '@/components/ui/card';
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import type { Category } from '@/lib/types';
 import { signupSupplier, type SignupState } from './actions';
 
-const input = 'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent';
-
-export function SignupForm({ token, email, categories, defaultCategoryId }: { token: string; email: string; categories: Category[]; defaultCategoryId: string }) {
+export function SignupForm({ token, email, categories, defaultCategoryName }: { token: string; email: string; categories: Category[]; defaultCategoryName: string }) {
   const action = signupSupplier.bind(null, token);
   const [state, formAction, pending] = useActionState<SignupState, FormData>(action, {});
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(defaultCategoryName ? [defaultCategoryName] : []);
 
   useEffect(() => {
     if (state.success) signIn('keycloak', { callbackUrl: '/supplier/dashboard' });
@@ -17,51 +21,57 @@ export function SignupForm({ token, email, categories, defaultCategoryId }: { to
 
   if (state.success) {
     return (
-      <div className="rounded-xl border border-border bg-surface p-6 text-center">
-        <p className="text-lg font-medium">You&apos;re all set!</p>
-        <p className="mt-1 text-sm text-muted">Wallet balance: {state.success.walletBalance} points</p>
-        <p className="mt-4 text-sm text-muted">Taking you to your dashboard…</p>
-      </div>
+      <Card className="text-center">
+        <CardContent>
+          <p className="text-lg font-medium">You&apos;re all set!</p>
+          <p className="mt-1 text-sm text-muted-foreground">Wallet balance: {state.success.walletBalance} points</p>
+          <p className="mt-4 text-sm text-muted-foreground">Taking you to your dashboard…</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <form action={formAction} className="space-y-3 rounded-xl border border-border bg-surface p-6">
-      <p className="text-sm text-muted">Signing up as <span className="font-medium text-text">{email}</span></p>
-      <div>
-        <label className="mb-1 block text-sm font-medium">Company name</label>
-        <input name="name" className={input} required />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium">GST number</label>
-        <input name="gst" className={input} required />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium">Category</label>
-        <select name="categoryId" defaultValue={defaultCategoryId} className={input} required>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="mb-1 block text-sm font-medium">City</label>
-          <input name="city" className={input} required />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">State</label>
-          <input name="state" className={input} required />
-        </div>
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium">Password</label>
-        <input name="password" type="password" minLength={8} className={input} required />
-      </div>
-      {state.error && <p className="text-sm text-danger">{state.error}</p>}
-      <button disabled={pending} className="w-full rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-accent-fg disabled:opacity-60">
-        {pending ? 'Creating your account…' : 'Sign up and start bidding'}
-      </button>
-    </form>
+    <Card>
+      <CardContent>
+        <form action={formAction}>
+          <FieldGroup>
+            <p className="text-sm text-muted-foreground">Signing up as <span className="font-medium text-foreground">{email}</span></p>
+            <Field>
+              <FieldLabel htmlFor="invite-name">Company name</FieldLabel>
+              <Input id="invite-name" name="name" autoComplete="organization" required />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="invite-gst">GST number</FieldLabel>
+              <Input id="invite-gst" name="gst" autoComplete="off" required />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="invite-category">Categories</FieldLabel>
+              <CategoryPicker id="invite-category" categories={categories} value={selectedCategories} onChange={setSelectedCategories} multiple />
+              {selectedCategories.map((category) => <input key={category} type="hidden" name="categories" value={category} />)}
+              <FieldDescription>The matched category is preselected. Add every other category your company supplies.</FieldDescription>
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="invite-city">City</FieldLabel>
+                <Input id="invite-city" name="city" autoComplete="address-level2" required />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="invite-state">State</FieldLabel>
+                <Input id="invite-state" name="state" autoComplete="address-level1" required />
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel htmlFor="invite-password">Password</FieldLabel>
+              <Input id="invite-password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+            </Field>
+            {state.error && <FieldError>{state.error}</FieldError>}
+            <Button type="submit" disabled={pending || selectedCategories.length === 0} className="w-full" size="lg">
+              {pending ? 'Creating your account' : 'Sign up and start bidding'}
+            </Button>
+          </FieldGroup>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

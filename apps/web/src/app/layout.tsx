@@ -1,15 +1,30 @@
 import type { Metadata } from 'next';
+import { ThemeProvider } from 'next-themes';
+import { ThemeToggle } from '@/components/theme-toggle';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'vProcly',
+  title: {
+    default: 'vProcly',
+    template: '%s | vProcly',
+  },
   description: 'Procurement, finance control and ExceptionOS',
+  icons: {
+    icon: '/brand-mark.svg',
+    shortcut: '/brand-mark.svg',
+    apple: '/brand-mark.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen antialiased">{children}</body>
+    <html lang="en" className="font-sans" suppressHydrationWarning>
+      <body className="min-h-screen antialiased">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          {children}
+          <ThemeToggle />
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

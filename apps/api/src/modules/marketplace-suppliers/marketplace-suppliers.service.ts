@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
-  categories,
   consumeSourcingLineInvite,
   listOpenLinesForSupplier,
+  listSupplierBidActivity,
   platformSuppliers,
   resolveSourcingLineInvite,
   submitSupplierBid,
@@ -13,6 +13,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { PlatformDb } from '../../platform/platform-db.service.js';
 import { hashInviteToken } from '@vprocly/contracts';
+import { CategoryResolverService } from '../categories/index.js';
 import type { SupplierRequestContext } from '../identity-tenancy/index.js';
 import { KeycloakAdminService } from '../identity-tenancy/index.js';
 import { BID_FEE_POINTS, SIGNUP_GRANT_POINTS, WalletService } from './wallet.service.js';
@@ -20,7 +21,7 @@ import { BID_FEE_POINTS, SIGNUP_GRANT_POINTS, WalletService } from './wallet.ser
 export const SignupInput = z.object({
   name: z.string().trim().min(1).max(255),
   gst: z.string().trim().min(1).max(32),
-  categoryId: z.uuid(),
+  categories: z.array(z.string().trim().min(1).max(120)).min(1).max(20),
   city: z.string().trim().min(1).max(120),
   state: z.string().trim().min(1).max(120),
   password: z.string().min(8).max(200),
@@ -48,7 +49,7 @@ export const SupplierSelfSignup = z.object({
   name: z.string().trim().min(1).max(255),
   gst: z.string().trim().min(1).max(32),
   email: z.email(),
-  categoryId: z.uuid(),
+  categories: z.array(z.string().trim().min(1).max(120)).min(1).max(20),
   city: z.string().trim().min(1).max(120),
   state: z.string().trim().min(1).max(120),
   country: z.string().trim().min(1).max(120),
@@ -56,8 +57,14 @@ export const SupplierSelfSignup = z.object({
 });
 export type SupplierSelfSignup = z.infer<typeof SupplierSelfSignup>;
 
+export const UpdateSupplierProfile = z.object({
+  phone: z.string().trim().min(1).max(32).nullable().optional(),
+});
+export type UpdateSupplierProfile = z.infer<typeof UpdateSupplierProfile>;
+
 export const PlaceBidInput = z.object({
   unitPrice: z.number().positive().max(1_000_000_000),
+  minimumOrderQty: z.number().positive().max(1_000_000_000).nullable().optional(),
   leadTimeDays: z.number().int().positive().max(3650).nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
 });
@@ -76,11 +83,8 @@ export class MarketplaceSuppliersService {
     private readonly platformDb: PlatformDb,
     private readonly wallet: WalletService,
     private readonly keycloakAdmin: KeycloakAdminService,
+    private readonly categoryResolver: CategoryResolverService,
   ) {}
-
-  listCategories() {
-    return this.platformDb.run((tx) => tx.select().from(categories).orderBy(categories.name));
-  }
 
   private async loadInvite(token: string) {
     const invite = await this.platformDb.run((tx) => resolveSourcingLineInvite(tx, hashInviteToken(token)));
@@ -102,26 +106,31 @@ export class MarketplaceSuppliersService {
       deliveryState: invite.delivery_state,
       needBy: invite.need_by,
     };
+    // An AI-discovered 'prospect' row (see marketplace.ts) is a company vProcly found and invited, not a
+    // completed signup -- it should see the same signup form as a never-invited email, not "already
+    // registered." Only status='active' (a real, completed signup) counts as a conflict.
     const [existing] = await this.platformDb.run((tx) =>
-      tx.select({ id: platformSuppliers.id }).from(platformSuppliers).where(eq(platformSuppliers.email, invite.email)),
+      tx.select({ id: platformSuppliers.id, status: platformSuppliers.status }).from(platformSuppliers).where(eq(platformSuppliers.email, invite.email)),
     );
-    return existing ? { status: 'already_registered', email: invite.email, line } : { status: 'pending_signup', email: invite.email, line };
+    return existing?.status === 'active'
+      ? { status: 'already_registered', email: invite.email, line }
+      : { status: 'pending_signup', email: invite.email, line };
   }
 
   async signup(token: string, input: SignupInput) {
     const invite = await this.loadInvite(token);
     if (invite.consumed) throw new ConflictException('This invite has already been used');
 
-    const [alreadyRegistered] = await this.platformDb.run((tx) =>
-      tx.select({ id: platformSuppliers.id }).from(platformSuppliers).where(eq(platformSuppliers.email, invite.email)),
+    const [existing] = await this.platformDb.run((tx) =>
+      tx.select({ id: platformSuppliers.id, status: platformSuppliers.status }).from(platformSuppliers).where(eq(platformSuppliers.email, invite.email)),
     );
-    if (alreadyRegistered) throw new ConflictException('This email is already registered; log in instead (coming soon)');
+    if (existing?.status === 'active') throw new ConflictException('This email is already registered; log in instead (coming soon)');
     // Also covers an email already used for a different kind of account (e.g. a buyer) -- Keycloak usernames
-    // are unique across the whole realm, not just within suppliers.
+    // are unique across the whole realm, not just within suppliers. A prospect never has a Keycloak account
+    // (no supplierMembers row until real signup), so this never false-positives on one.
     if (await this.keycloakAdmin.emailTaken(invite.email)) throw new ConflictException('An account with this email already exists');
 
-    const [category] = await this.platformDb.run((tx) => tx.select().from(categories).where(eq(categories.id, input.categoryId)));
-    if (!category) throw new BadRequestException('Unknown category');
+    const categoryIds = await Promise.all(input.categories.map((c) => this.categoryResolver.resolve(c)));
 
     // The company profile (platformSuppliers) commits first, and only then do we call out to Keycloak.
     // Doing it the other way round -- Keycloak call inside the transaction -- risks an orphaned Keycloak
@@ -131,11 +140,22 @@ export class MarketplaceSuppliersService {
     // that exists in Keycloak but is unlinked from any company. No supplierMembers row is written -- and so
     // no one can log in as this supplier -- until Keycloak actually confirms the account.
     const supplierId = await this.platformDb.run(async (tx) => {
-      const [supplier] = await tx
-        .insert(platformSuppliers)
-        .values({ name: input.name, gst: input.gst, email: invite.email, city: input.city, state: input.state })
-        .returning();
-      await tx.insert(supplierCategories).values({ platformSupplierId: supplier!.id, categoryId: input.categoryId });
+      // A promoted prospect is updated in place, not re-inserted -- email is unique, so a second insert
+      // would fail anyway. discoveryMetadata and any Places-sourced phone/country are left untouched: a
+      // permanent record that this supplier started as an AI discovery.
+      const [supplier] = existing
+        ? await tx
+            .update(platformSuppliers)
+            .set({ name: input.name, gst: input.gst, city: input.city, state: input.state, status: 'active' })
+            .where(eq(platformSuppliers.id, existing.id))
+            .returning()
+        : await tx
+            .insert(platformSuppliers)
+            .values({ name: input.name, gst: input.gst, email: invite.email, city: input.city, state: input.state })
+            .returning();
+      for (const categoryId of categoryIds) {
+        await tx.insert(supplierCategories).values({ platformSupplierId: supplier!.id, categoryId }).onConflictDoNothing();
+      }
       await this.wallet.grant(tx, supplier!.id, SIGNUP_GRANT_POINTS, 'signup', supplier!.id);
 
       const consumed = await consumeSourcingLineInvite(tx, hashInviteToken(token), supplier!.id);
@@ -166,21 +186,28 @@ export class MarketplaceSuppliersService {
   /** Self-serve signup: identical account-creation shape to the invite-gated signup() above, just without
    *  an invite to consume -- the supplier provides their own email instead of one prefilled by an invite. */
   async selfSignup(input: SupplierSelfSignup) {
-    const [alreadyRegistered] = await this.platformDb.run((tx) =>
-      tx.select({ id: platformSuppliers.id }).from(platformSuppliers).where(eq(platformSuppliers.email, input.email)),
+    const [existing] = await this.platformDb.run((tx) =>
+      tx.select({ id: platformSuppliers.id, status: platformSuppliers.status }).from(platformSuppliers).where(eq(platformSuppliers.email, input.email)),
     );
-    if (alreadyRegistered) throw new ConflictException('This email is already registered');
+    if (existing?.status === 'active') throw new ConflictException('This email is already registered');
     if (await this.keycloakAdmin.emailTaken(input.email)) throw new ConflictException('An account with this email already exists');
 
-    const [category] = await this.platformDb.run((tx) => tx.select().from(categories).where(eq(categories.id, input.categoryId)));
-    if (!category) throw new BadRequestException('Unknown category');
+    const categoryIds = await Promise.all(input.categories.map((c) => this.categoryResolver.resolve(c)));
 
     const supplierId = await this.platformDb.run(async (tx) => {
-      const [supplier] = await tx
-        .insert(platformSuppliers)
-        .values({ name: input.name, gst: input.gst, email: input.email, city: input.city, state: input.state, country: input.country })
-        .returning();
-      await tx.insert(supplierCategories).values({ platformSupplierId: supplier!.id, categoryId: input.categoryId });
+      const [supplier] = existing
+        ? await tx
+            .update(platformSuppliers)
+            .set({ name: input.name, gst: input.gst, city: input.city, state: input.state, country: input.country, status: 'active' })
+            .where(eq(platformSuppliers.id, existing.id))
+            .returning()
+        : await tx
+            .insert(platformSuppliers)
+            .values({ name: input.name, gst: input.gst, email: input.email, city: input.city, state: input.state, country: input.country })
+            .returning();
+      for (const categoryId of categoryIds) {
+        await tx.insert(supplierCategories).values({ platformSupplierId: supplier!.id, categoryId }).onConflictDoNothing();
+      }
       await this.wallet.grant(tx, supplier!.id, SIGNUP_GRANT_POINTS, 'signup', supplier!.id);
       return supplier!.id;
     });
@@ -213,11 +240,21 @@ export class MarketplaceSuppliersService {
     return {
       name: supplier.name,
       email: supplier.email,
+      phone: supplier.phone,
       city: supplier.city,
       state: supplier.state,
       country: supplier.country,
       walletBalance: balance,
     };
+  }
+
+  /** Lets a supplier add/update their own mobile number -- see the "Mobile number" field in the supplier
+   *  dashboard's profile popover. Needed for the buyer-side "Call" button on a supplier row to have
+   *  anything to dial; not otherwise validated as a real phone number here (kept loose, matching this
+   *  codebase's existing convention for free-text contact fields). */
+  async updateMe(ctx: SupplierRequestContext, input: UpdateSupplierProfile) {
+    await this.platformDb.run((tx) => tx.update(platformSuppliers).set({ phone: input.phone ?? null }).where(eq(platformSuppliers.id, ctx.platformSupplierId)));
+    return this.me(ctx);
   }
 
   /** Open lines this supplier was matched/notified for -- blind (no buyer/tenant field), see
@@ -233,6 +270,30 @@ export class MarketplaceSuppliersService {
       needBy: r.need_by,
       alreadyBid: r.already_bid,
       myUnitPrice: r.my_unit_price,
+      myMinimumOrderQty: r.my_minimum_order_qty,
+    }));
+  }
+
+  async bidActivity(ctx: SupplierRequestContext) {
+    const rows = await this.platformDb.run((tx) => listSupplierBidActivity(tx, ctx.platformSupplierId));
+    return rows.map((r) => ({
+      bidId: r.bid_id,
+      sourcingLineId: r.sourcing_line_id,
+      itemCode: r.item_code,
+      description: r.description,
+      qty: r.qty,
+      uom: r.uom,
+      deliveryCity: r.delivery_city,
+      deliveryState: r.delivery_state,
+      needBy: r.need_by,
+      unitPrice: r.unit_price,
+      minimumOrderQty: r.minimum_order_qty,
+      leadTimeDays: r.lead_time_days,
+      notes: r.notes,
+      status: r.bid_status,
+      buyer: r.buyer_name
+        ? { name: r.buyer_name, contactName: r.buyer_contact_name, contactEmail: r.buyer_contact_email }
+        : null,
     }));
   }
 
@@ -246,6 +307,7 @@ export class MarketplaceSuppliersService {
           platformSupplierId: ctx.platformSupplierId,
           sourcingLineId,
           unitPrice: String(input.unitPrice),
+          minimumOrderQty: input.minimumOrderQty == null ? null : String(input.minimumOrderQty),
           leadTimeDays: input.leadTimeDays ?? null,
           notes: input.notes ?? null,
         });

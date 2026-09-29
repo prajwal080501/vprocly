@@ -1,0 +1,23 @@
+{
+  "reused_secrets": {
+    "gemini_api_key": "",
+    "google_places_api_key": "",
+    "sarvam_api_key": "",
+    "sarvam_org_id": "",
+    "sarvam_workspace_id": "",
+    "sarvam_app_id": "",
+    "sarvam_connection_id": "",
+    "sarvam_agent_phone": "",
+    "sarvam_webhook_secret": "",
+    "smtp_host": "",
+    "smtp_port": 587,
+    "smtp_user": "",
+    "smtp_pass": "",
+    "smtp_from": "",
+    "noreply_smtp_host": "",
+    "noreply_smtp_port": 587,
+    "noreply_smtp_user": "",
+    "noreply_smtp_pass": "",
+    "noreply_smtp_from": ""
+  }
+}

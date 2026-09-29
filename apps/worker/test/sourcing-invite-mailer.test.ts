@@ -13,7 +13,7 @@ const MAILPIT_API = process.env.MAILPIT_API ?? 'http://localhost:58025';
 const pool = createPool(process.env.DATABASE_URL ?? 'postgres://vprocly_app:vprocly_app@localhost:55432/vprocly');
 const db = createDatabase(pool);
 const transport = nodemailer.createTransport({ host: process.env.SMTP_HOST ?? 'localhost', port: Number(process.env.SMTP_PORT ?? 51025), secure: false });
-const mailers = { rfq: transport, rfqFrom: 'vProcly RFQ <rfq@vprocly.example>', noreply: transport, noreplyFrom: 'vProcly <noreply@vprocly.example>' };
+const mailers = { rfq: transport, rfqFrom: 'vProcly RFQ <rfq@vprocly.example>', noreply: transport, noreplyFrom: 'vProcly <noreply@vprocly.example>', liveRfq: transport, liveRfqFrom: 'vProcly RFQ <rfq@vprocly.example>' };
 const deps = { db, mailers, publicWebUrl: 'http://localhost:3000' };
 const consumer = sourcingInviteMailer(deps);
 
@@ -44,18 +44,18 @@ async function seedLineWithPendingNotification(email: string) {
   });
 }
 
-function matchedEvent(sourcingLineId: string): EventEnvelope {
+function emailEvent(sourcingLineId: string, notificationId: string): EventEnvelope {
   return {
     id: randomUUID(),
-    type: 'sourcing.sourcing_line_matched',
+    type: 'sourcing.supplier_email_requested',
     version: 1,
     tenantId: ACME,
-    aggregateType: 'sourcing_line',
-    aggregateId: sourcingLineId,
+    aggregateType: 'sourcing_line_notification',
+    aggregateId: notificationId,
     occurredAt: new Date().toISOString(),
     correlationId: null,
     actorId: null,
-    payload: { sourcingLineId, matchedSupplierCount: 0, invitedNewCount: 1 },
+    payload: { sourcingLineId, notificationId, reason: 'no_phone' },
   };
 }
 
@@ -75,7 +75,7 @@ describe('sourcing invite mailer', () => {
     const email = `mailer-${randomUUID().slice(0, 8)}@example.com`;
     const { lineId, notificationId } = await seedLineWithPendingNotification(email);
 
-    expect(await handleEvent(db, consumer, matchedEvent(lineId))).toBe('processed');
+    expect(await handleEvent(db, consumer, emailEvent(lineId, notificationId))).toBe('processed');
 
     const msg = await lastMailpitMessageTo(email);
     expect(msg).not.toBeNull();
@@ -100,13 +100,13 @@ describe('sourcing invite mailer', () => {
 
   it('does not re-send once already sent (redelivery of the same fully-processed event is a no-op)', async () => {
     const email = `mailer-${randomUUID().slice(0, 8)}@example.com`;
-    const { lineId } = await seedLineWithPendingNotification(email);
+    const { lineId, notificationId } = await seedLineWithPendingNotification(email);
 
-    await handleEvent(db, consumer, matchedEvent(lineId));
+    await handleEvent(db, consumer, emailEvent(lineId, notificationId));
     const first = await lastMailpitMessageTo(email);
 
     // A second, distinct event delivery for the same line finds no pending (unsent) notifications left.
-    expect(await handleEvent(db, consumer, matchedEvent(lineId))).toBe('processed');
+    expect(await handleEvent(db, consumer, emailEvent(lineId, notificationId))).toBe('processed');
     const list = (await (await fetch(`${MAILPIT_API}/api/v1/messages`)).json()) as { messages: { To: { Address: string }[] }[] };
     expect(list.messages.filter((m) => m.To.some((t) => t.Address === email))).toHaveLength(1);
     expect(first).not.toBeNull();
@@ -114,8 +114,8 @@ describe('sourcing invite mailer', () => {
 
   it('is idempotent per event id via the inbox (exact redelivery of the same event is skipped entirely)', async () => {
     const email = `mailer-${randomUUID().slice(0, 8)}@example.com`;
-    const { lineId } = await seedLineWithPendingNotification(email);
-    const event = matchedEvent(lineId);
+    const { lineId, notificationId } = await seedLineWithPendingNotification(email);
+    const event = emailEvent(lineId, notificationId);
 
     expect(await handleEvent(db, consumer, event)).toBe('processed');
     expect(await handleEvent(db, consumer, event)).toBe('duplicate');

@@ -1,0 +1,87 @@
+# Pilot/demo deployment (see the AWS Pilot Deployment plan): one EC2 host running everything backend.
+# Env vars are supplied via a `.env` file materialized at boot from SSM Parameter Store -- never commit one.
+name: vprocly
+
+services:
+  web:
+    image: ${WEB_IMAGE}
+    restart: unless-stopped
+    env_file: .env
+    depends_on: [api, keycloak]
+
+  api:
+    image: ${API_IMAGE}
+    restart: unless-stopped
+    env_file: .env
+    depends_on: [excel]
+
+  worker:
+    image: ${WORKER_IMAGE}
+    restart: unless-stopped
+    env_file: .env
+    depends_on: [nats, clamav, temporal, excel]
+
+  excel:
+    image: ${EXCEL_IMAGE}
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    command: start --import-realm --optimized=false
+    restart: unless-stopped
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: 8080
+      KC_HOSTNAME: https://auth.vprocly.com
+      KC_PROXY_HEADERS: xforwarded
+      KC_DB: postgres
+      # sslmode=require here means "encrypt, don't verify the server cert" for JDBC (the opposite default
+      # from node-postgres, which is why the api/worker DATABASE_URL below needs sslmode=no-verify instead
+      # to get the same behavior) -- RDS requires TLS but its cert chain isn't in a default trust store.
+      KC_DB_URL: jdbc:postgresql://${RDS_ENDPOINT}:5432/keycloak?sslmode=require
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KC_VPROCLY_WEB_SECRET: ${KC_VPROCLY_WEB_SECRET}
+      KC_VPROCLY_ADMIN_API_SECRET: ${KC_VPROCLY_ADMIN_API_SECRET}
+    volumes:
+      - ./keycloak/vprocly-realm.prod.json:/opt/keycloak/data/import/vprocly-realm.json:ro
+
+  nats:
+    image: nats:2.11
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    restart: unless-stopped
+    volumes: [nats_data:/data]
+
+  # start-dev's embedded SQLite persistence, same as local dev -- an accepted pilot-tier simplification
+  # (Temporal's own docs describe start-dev as intended for exactly this: single-node, no separate DB to
+  # provision/migrate). Not exposed publicly; only the worker talks to it, over the internal network.
+  temporal:
+    image: temporalio/temporal:latest
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
+    user: "0"
+    restart: unless-stopped
+    volumes: [temporal_data:/data]
+
+  clamav:
+    image: clamav/clamav-debian:stable
+    restart: unless-stopped
+    volumes: [clamav_data:/var/lib/clamav]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api, keycloak]
+
+volumes:
+  nats_data:
+  temporal_data:
+  clamav_data:
+  caddy_data:
+  caddy_config:
