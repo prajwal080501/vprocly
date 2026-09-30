@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { ThemeProvider } from 'next-themes';
-import { ThemeToggle } from '@/components/theme-toggle';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -22,7 +21,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
-          <ThemeToggle />
         </ThemeProvider>
       </body>
     </html>

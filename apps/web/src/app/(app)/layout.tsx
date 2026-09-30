@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { BrandLogo } from '@/components/brand';
 import { Nav } from '@/components/nav';
 import { ProfilePopover } from '@/components/profile-popover';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { api } from '@/lib/api';
 import { authOptions } from '@/lib/auth';
 import type { Me } from '@/lib/types';
@@ -20,30 +21,33 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-2 md:px-6">
+        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-1 px-4 py-2 sm:gap-3 md:px-6">
           <Link href="/home" className="flex min-w-0 items-center gap-3">
             <BrandLogo animated className="hidden sm:inline-flex" markClassName="size-8" />
-            <BrandLogo animated className="sm:hidden" markClassName="size-8 [&>span:last-child]:hidden" />
+            <BrandLogo animated className="sm:hidden" markClassName="size-8" textClassName="hidden" />
             <span className="hidden max-w-40 truncate text-xs text-muted-foreground lg:inline">{me.tenant.name}</span>
           </Link>
           <Nav />
-          <ProfilePopover
-            name={me.user.name ?? me.user.email ?? 'Buyer'}
-            subtitle={me.tenant.name}
-            accountLabel={role}
-            initials={initials}
-            callbackUrl="/signin"
-            details={[
-              { label: 'Email', value: me.user.email ?? 'Not provided', icon: 'email' },
-              { label: 'Organization', value: me.tenant.name, icon: 'organization' },
-              { label: 'Default currency', value: me.tenant.defaultCurrency, icon: 'balance' },
-            ]}
-            phone={me.user.phone}
-            onUpdatePhone={updateBuyerPhone}
-          />
+          <div className="flex items-center gap-2">
+            <ThemeToggle className="hidden sm:inline-flex" />
+            <ProfilePopover
+              name={me.user.name ?? me.user.email ?? 'Buyer'}
+              subtitle={me.tenant.name}
+              accountLabel={role}
+              initials={initials}
+              callbackUrl="/signin"
+              details={[
+                { label: 'Email', value: me.user.email ?? 'Not provided', icon: 'email' },
+                { label: 'Organization', value: me.tenant.name, icon: 'organization' },
+                { label: 'Default currency', value: me.tenant.defaultCurrency, icon: 'balance' },
+              ]}
+              phone={me.user.phone}
+              onUpdatePhone={updateBuyerPhone}
+            />
+          </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl px-4 pb-10 pt-3 md:px-6">{children}</main>
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6">{children}</main>
     </div>
   );
 }

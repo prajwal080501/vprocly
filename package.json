@@ -8,6 +8,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "deploy:aws": "bash scripts/deploy-aws.sh",
     "stack:up": "docker compose -f infra/compose/docker-compose.yml up -d",
     "stack:down": "docker compose -f infra/compose/docker-compose.yml down",
     "db:migrate": "pnpm --filter @vprocly/db migrate",

@@ -3,16 +3,17 @@
 import { useTheme } from 'next-themes';
 import { MoonIcon, SunIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-export function ThemeToggle() {
+export function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
 
   return (
     <Button
       variant="outline"
       size="icon"
-      className="fixed bottom-4 right-4 z-50 rounded-full bg-background/90 shadow-md shadow-foreground/10 backdrop-blur"
-      aria-label="Toggle dark mode"
+      className={cn('relative shrink-0 bg-background/70 backdrop-blur', className)}
+      aria-label="Toggle color theme"
       onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
     >
       <SunIcon className="scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />

@@ -22,7 +22,7 @@ export function Nav() {
             href={item.href}
             className={cn(
               buttonVariants({ variant: active ? 'outline' : 'ghost', size: 'sm' }),
-              'min-w-24 border-transparent px-4 shadow-none',
+              'min-w-20 border-transparent px-3 shadow-none sm:min-w-24 sm:px-4',
               active && 'bg-background shadow-xs',
             )}
           >

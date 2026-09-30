@@ -39,6 +39,23 @@ pnpm dev                               # api :4000, worker, web :3000
 
 Excel service: `cd services/excel && python3 -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/uvicorn app.main:app --port 8001` (or `docker compose -f infra/compose/docker-compose.yml up -d excel`, a containerized copy on port 58001 for CI or a no-setup option; the two never collide).
 
+## Deploy to AWS
+
+The pilot stack must already exist from `infra/terraform`. Routine application releases do not run
+Terraform, so a code deployment cannot accidentally replace the EC2 host. With Docker running and an AWS
+CLI profile that can push to ECR and send SSM commands:
+
+```sh
+AWS_PROFILE=your-profile pnpm deploy:aws
+```
+
+The script runs lint and type checks, builds all four ARM64 images, pushes a timestamped release and
+`latest` to ECR, applies database migrations, updates the Compose stack over SSM, and verifies the public
+web, API, and Keycloak endpoints. The remote script runs from a temporary file so migration tooling cannot
+consume the remaining deployment commands from stdin. The previous image set is restored if the remote migration
+or readiness check fails. Use `--skip-checks` only when those checks already ran in CI, or `--tag <tag>` to
+choose the release tag explicitly.
+
 Dev users (password `password`): `alice` (Acme, requester), `bob` (Acme, approver/buyer/finance/admin), `carol` (Globex, requester/admin). There is no pre-seeded dev supplier user: suppliers self-register, either through an emailed invite link or, with no invite at all, at `/supplier/signup` (see below). A new buyer company can also create its own account at `/signup` instead of being manually seeded.
 
 | Service | URL |

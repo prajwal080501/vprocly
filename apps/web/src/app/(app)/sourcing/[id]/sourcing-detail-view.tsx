@@ -6,28 +6,32 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeftIcon,
   AwardIcon,
+  Building2Icon,
+  CalendarDaysIcon,
   CheckCircle2Icon,
   ChevronRightIcon,
   CircleDollarSignIcon,
   Clock3Icon,
   FileTextIcon,
+  HashIcon,
   LoaderCircleIcon,
   MailCheckIcon,
   MapPinIcon,
   PackageIcon,
   PhoneCallIcon,
   SendIcon,
-  SparklesIcon,
   TimerIcon,
   TrendingDownIcon,
   UsersIcon,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { SourcingBid, SourcingLine, SourcingRequestDetail, SupplierResearchNotification } from '@/lib/types';
 import { AcceptBidButton } from './accept-bid-button';
 import { InviteLinePopover } from './invite-line-popover';
@@ -96,7 +100,15 @@ function CallDetailsDialog({ supplier }: { supplier: SupplierResearchNotificatio
 }
 
 function Metric({ icon: Icon, label, value }: { icon: typeof UsersIcon; label: string; value: string | number }) {
-  return <div className="min-w-28 border-l pl-4"><div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Icon className="size-3.5" />{label}</div><p className="mt-1 text-xl font-semibold">{value}</p></div>;
+  return <div className="flex min-w-24 items-center gap-3 rounded-lg bg-muted/70 px-3 py-2"><Icon className="size-4 text-muted-foreground" /><div><p className="text-xs text-muted-foreground">{label}</p><p className="text-base font-semibold leading-tight">{value}</p></div></div>;
+}
+
+function ItemDetail({ icon: Icon, label, value }: { icon: typeof UsersIcon; label: string; value: string }) {
+  return <div className="flex min-w-0 items-start gap-2.5"><Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><div className="min-w-0"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 truncate text-sm font-medium">{value}</p></div></div>;
+}
+
+function BidMetric({ icon: Icon, label, value }: { icon: typeof UsersIcon; label: string; value: string }) {
+  return <Card size="sm" className="rounded-lg"><CardHeader><CardDescription className="flex items-center gap-2"><Icon className="size-4" />{label}</CardDescription><CardTitle className="text-xl font-semibold">{value}</CardTitle></CardHeader></Card>;
 }
 
 function QuoteCard({ requestId, line, bid, currency, rank, bestPrice, fastestLead }: { requestId: string; line: SourcingLine; bid: SourcingBid; currency: string; rank: number; bestPrice: number; fastestLead: number | null }) {
@@ -107,7 +119,7 @@ function QuoteCard({ requestId, line, bid, currency, rank, bestPrice, fastestLea
   const isAccepted = bid.status === 'accepted';
 
   return (
-    <Card className={isAccepted ? 'rounded-lg border bg-background shadow-none ring-2 ring-primary' : 'rounded-lg border bg-background shadow-none ring-0'}>
+    <Card size="sm" className={isAccepted ? 'rounded-lg ring-2 ring-primary' : 'rounded-lg'}>
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -118,14 +130,13 @@ function QuoteCard({ requestId, line, bid, currency, rank, bestPrice, fastestLea
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div><p className="text-xs text-muted-foreground">Unit price</p><div className="mt-1 flex flex-wrap items-baseline gap-2"><p className="text-2xl font-semibold tracking-tight">{money(bid.unitPrice, currency)}</p><span className="text-xs text-muted-foreground">per {line.uom}</span></div></div>
-        <div className="flex flex-wrap gap-2">{isBestPrice && <Badge variant="secondary"><TrendingDownIcon data-icon="inline-start" />Best price</Badge>}{isFastest && <Badge variant="secondary"><TimerIcon data-icon="inline-start" />Fastest delivery</Badge>}</div>
-        <div className="grid grid-cols-3 gap-3 border-y py-3">
-          <div><p className="text-xs text-muted-foreground">Total</p><p className="mt-1 font-semibold">{money(total, currency)}</p></div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs text-muted-foreground">Unit price</p><div className="mt-1 flex flex-wrap items-baseline gap-2"><p className="text-2xl font-semibold tracking-tight">{money(bid.unitPrice, currency)}</p><span className="text-xs text-muted-foreground">per {line.uom}</span></div></div><div className="flex flex-wrap gap-2">{isBestPrice && <Badge variant="secondary"><TrendingDownIcon data-icon="inline-start" />Best price</Badge>}{isFastest && <Badge variant="secondary"><TimerIcon data-icon="inline-start" />Fastest delivery</Badge>}</div></div>
+        <div className="grid grid-cols-3 gap-3 rounded-lg bg-muted/60 p-3">
+          <div><p className="text-xs text-muted-foreground">Total</p><p className="mt-1 truncate font-semibold">{money(total, currency)}</p></div>
           <div><p className="text-xs text-muted-foreground">Lead time</p><p className="mt-1 font-semibold">{bid.leadTimeDays ? `${bid.leadTimeDays} days` : '-'}</p></div>
-          <div><p className="text-xs text-muted-foreground">MOQ</p><p className="mt-1 font-semibold">{bid.minimumOrderQty ? `${bid.minimumOrderQty} ${line.uom}` : '-'}</p></div>
+          <div><p className="text-xs text-muted-foreground">MOQ</p><p className="mt-1 truncate font-semibold">{bid.minimumOrderQty ? `${bid.minimumOrderQty} ${line.uom}` : '-'}</p></div>
         </div>
-        <div><p className="text-xs text-muted-foreground">Supplier note</p><p className="mt-1 min-h-10 text-sm leading-relaxed">{bid.notes || 'No additional notes provided.'}</p></div>
+        {bid.notes && <div><p className="text-xs text-muted-foreground">Supplier note</p><p className="mt-1 text-sm leading-relaxed">{bid.notes}</p></div>}
       </CardContent>
       {line.status === 'open' && bid.status === 'submitted' && <CardFooter className="justify-end"><AcceptBidButton requestId={requestId} lineId={line.id} bidId={bid.id} supplierName={bid.supplierName} /></CardFooter>}
       {isAccepted && <CardFooter className="gap-2 text-sm font-medium"><AwardIcon className="size-4 text-primary" />Selected supplier for this item</CardFooter>}
@@ -175,47 +186,55 @@ export function SourcingDetailView({ request, currency, initialLineId }: { reque
   if (!line) return <p className="text-sm text-muted-foreground">This request has no items.</p>;
 
   return (
-    <div className="flex flex-col gap-6 bg-background">
-      <header className="flex flex-col gap-5 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <Button variant="ghost" size="sm" render={<Link href="/sourcing" />}><ArrowLeftIcon data-icon="inline-start" />All items</Button>
-          <div className="mt-3 flex flex-wrap items-center gap-2"><Badge variant="secondary">{titleCase(request.status)}</Badge><span className="text-xs text-muted-foreground">{request.source === 'bom_upload' ? 'BOM upload' : 'Manual entry'} · {new Date(request.createdAt).toLocaleDateString()}</span>{isRefreshing && <Badge variant="outline"><LoaderCircleIcon data-icon="inline-start" className="animate-spin" />Updating</Badge>}</div>
-          <h1 className="mt-2 truncate text-2xl font-semibold tracking-tight">{request.title}</h1>
-        </div>
-        <div className="flex items-end gap-6"><Metric icon={UsersIcon} label="Notified" value={notifiedTotal} /><Metric icon={SendIcon} label="Bids" value={bidTotal} /></div>
-      </header>
+    <div className="flex flex-col gap-5">
+      <Button className="w-fit" nativeButton={false} variant="ghost" size="sm" render={<Link href="/sourcing" />}><ArrowLeftIcon data-icon="inline-start" />All requests</Button>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(16rem,0.7fr)_minmax(0,1.3fr)] lg:items-end">
-        <div><label className="mb-2 block text-xs font-medium text-muted-foreground" htmlFor="item-selector">Viewing item</label><Select value={line.id} onValueChange={(value) => selectLine(value as string)}><SelectTrigger id="item-selector" className="h-10 bg-background"><span className="truncate">{line.itemCode ? `${line.itemCode} · ` : ''}{line.description}</span></SelectTrigger><SelectContent><SelectGroup>{request.lines.map((item, index) => <SelectItem key={item.id} value={item.id}>{index + 1}. {item.itemCode ? `${item.itemCode} · ` : ''}{item.description}</SelectItem>)}</SelectGroup></SelectContent></Select></div>
-        <div className="grid grid-cols-2 gap-x-5 gap-y-3 rounded-lg border bg-background p-4 sm:grid-cols-3 xl:grid-cols-6">
-          <div><p className="text-xs text-muted-foreground">Brand / manufacturer</p><p className="mt-1 truncate font-medium">{line.brandManufacturer || '-'}</p></div>
-          <div><p className="text-xs text-muted-foreground">HSN / MFG code</p><p className="mt-1 truncate font-medium">{line.hsnMfgCode || '-'}</p></div>
-          <div><p className="text-xs text-muted-foreground">Quantity</p><p className="mt-1 font-medium">{line.qty} {line.uom}</p></div>
-          <div><p className="text-xs text-muted-foreground">Deliver to</p><p className="mt-1 truncate font-medium">{line.deliveryCity}, {line.deliveryState}</p></div>
-          <div><p className="text-xs text-muted-foreground">Need by</p><p className="mt-1 font-medium">{line.needBy ? new Date(line.needBy).toLocaleDateString() : 'Not set'}</p></div>
-          <div><p className="text-xs text-muted-foreground">Item status</p><p className="mt-1 font-medium">{titleCase(line.status)}</p></div>
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><SparklesIcon className="size-4 text-primary" /><h2 className="text-lg font-semibold">Supplier bid comparison</h2></div><p className="mt-1 text-sm text-muted-foreground">Quotes are ranked by unit price, with delivery speed highlighted separately.</p></div>{line.status === 'open' && <InviteLinePopover requestId={request.id} lineId={line.id} description={line.description} />}</div>
-        {bids.length > 0 ? <>
-          <div className="grid overflow-hidden rounded-lg border bg-background sm:grid-cols-3">
-            <div className="p-4"><p className="flex items-center gap-1.5 text-xs text-muted-foreground"><CircleDollarSignIcon className="size-3.5" />Best unit price</p><p className="mt-1 text-lg font-semibold">{money(bestPrice, currency)}</p></div>
-            <div className="border-y p-4 sm:border-x sm:border-y-0"><p className="flex items-center gap-1.5 text-xs text-muted-foreground"><TimerIcon className="size-3.5" />Fastest lead time</p><p className="mt-1 text-lg font-semibold">{fastestLead == null ? '-' : `${fastestLead} days`}</p></div>
-            <div className="p-4"><p className="flex items-center gap-1.5 text-xs text-muted-foreground"><PackageIcon className="size-3.5" />Requested quantity</p><p className="mt-1 text-lg font-semibold">{line.qty} {line.uom}</p></div>
+      <Card className="rounded-lg">
+        <CardHeader className="border-b">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{titleCase(request.status)}</Badge><span className="text-xs text-muted-foreground">{request.source === 'bom_upload' ? 'BOM upload' : 'Manual entry'} · {new Date(request.createdAt).toLocaleDateString()}</span>{isRefreshing && <Badge variant="outline"><LoaderCircleIcon data-icon="inline-start" className="animate-spin" />Updating</Badge>}</div><CardTitle className="mt-2 truncate text-2xl font-semibold">{request.title}</CardTitle><CardDescription className="mt-1">{request.lines.length} {request.lines.length === 1 ? 'item' : 'items'} in this sourcing request</CardDescription></div>
+            <div className="flex gap-2"><Metric icon={UsersIcon} label="Notified" value={notifiedTotal} /><Metric icon={SendIcon} label="Bids" value={bidTotal} /></div>
           </div>
-          <div className="grid gap-4 xl:grid-cols-3">{bids.map((bid, index) => <QuoteCard key={bid.id} requestId={request.id} line={line} bid={bid} currency={currency} rank={index + 1} bestPrice={bestPrice} fastestLead={fastestLead} />)}</div>
-        </> : <div className="flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed text-center"><CircleDollarSignIcon className="size-8 text-muted-foreground" /><h3 className="mt-3 font-medium">Waiting for supplier bids</h3><p className="mt-1 max-w-sm text-sm text-muted-foreground">Notified suppliers can submit quotes while this item remains open.</p></div>}
-      </section>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <div className="max-w-2xl"><label className="mb-2 block text-xs font-medium text-muted-foreground" htmlFor="item-selector">Selected item</label><Select value={line.id} onValueChange={(value) => selectLine(value as string)}><SelectTrigger id="item-selector" className="h-10 bg-background"><span className="truncate">{line.itemCode ? `${line.itemCode} · ` : ''}{line.description}</span></SelectTrigger><SelectContent><SelectGroup>{request.lines.map((item, index) => <SelectItem key={item.id} value={item.id}>{index + 1}. {item.itemCode ? `${item.itemCode} · ` : ''}{item.description}</SelectItem>)}</SelectGroup></SelectContent></Select></div>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-5 rounded-lg bg-muted/50 p-4 md:grid-cols-3 xl:grid-cols-6">
+            <ItemDetail icon={Building2Icon} label="Brand / manufacturer" value={line.brandManufacturer || '-'} />
+            <ItemDetail icon={HashIcon} label="HSN / MFG code" value={line.hsnMfgCode || '-'} />
+            <ItemDetail icon={PackageIcon} label="Quantity" value={`${line.qty} ${line.uom}`} />
+            <ItemDetail icon={MapPinIcon} label="Deliver to" value={`${line.deliveryCity}, ${line.deliveryState}`} />
+            <ItemDetail icon={CalendarDaysIcon} label="Need by" value={line.needBy ? new Date(line.needBy).toLocaleDateString() : 'Not set'} />
+            <ItemDetail icon={CheckCircle2Icon} label="Item status" value={titleCase(line.status)} />
+          </div>
+        </CardContent>
+      </Card>
 
-      <Separator />
+      <Tabs defaultValue="bids" className="gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <TabsList className="w-full sm:w-auto">
+            <TabsTrigger value="bids"><CircleDollarSignIcon />Bids <Badge variant="secondary">{bids.length}</Badge></TabsTrigger>
+            <TabsTrigger value="outreach"><UsersIcon />Outreach <Badge variant="secondary">{suppliers.length}</Badge></TabsTrigger>
+          </TabsList>
+          {line.status === 'open' && <InviteLinePopover requestId={request.id} lineId={line.id} description={line.description} />}
+        </div>
 
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-lg font-semibold">Supplier outreach</h2><p className="mt-1 text-sm text-muted-foreground">{suppliers.length} suppliers discovered or invited for this item.</p></div>{canRetry && <RetryResearchButton requestId={request.id} lineId={line.id} />}</div>
-        <div className="overflow-hidden rounded-lg border bg-background">{suppliers.length ? suppliers.map((supplier) => <OutreachRow key={supplier.id} requestId={request.id} supplier={supplier} />) : <div className="flex min-h-32 items-center justify-center px-4 text-sm text-muted-foreground">Supplier research is {job?.status ?? 'not started'}.</div>}</div>
-        {job?.lastError && <p className="text-sm text-destructive">{job.lastError}</p>}
-      </section>
+        <TabsContent value="bids" className="flex flex-col gap-4">
+          {bids.length > 0 ? <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <BidMetric icon={CircleDollarSignIcon} label="Best unit price" value={money(bestPrice, currency)} />
+              <BidMetric icon={TimerIcon} label="Fastest lead time" value={fastestLead == null ? '-' : `${fastestLead} days`} />
+              <BidMetric icon={PackageIcon} label="Requested quantity" value={`${line.qty} ${line.uom}`} />
+            </div>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,28rem),1fr))] gap-4">{bids.map((bid, index) => <QuoteCard key={bid.id} requestId={request.id} line={line} bid={bid} currency={currency} rank={index + 1} bestPrice={bestPrice} fastestLead={fastestLead} />)}</div>
+          </> : <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><CircleDollarSignIcon /></EmptyMedia><EmptyTitle>Waiting for supplier bids</EmptyTitle><EmptyDescription>Notified suppliers can submit quotes while this item remains open.</EmptyDescription></EmptyHeader></Empty>}
+        </TabsContent>
+
+        <TabsContent value="outreach" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{suppliers.length} suppliers discovered or invited for this item.</p>{canRetry && <RetryResearchButton requestId={request.id} lineId={line.id} />}</div>
+          {suppliers.length ? <div className="overflow-hidden rounded-lg border">{suppliers.map((supplier) => <OutreachRow key={supplier.id} requestId={request.id} supplier={supplier} />)}</div> : <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><UsersIcon /></EmptyMedia><EmptyTitle>No suppliers yet</EmptyTitle><EmptyDescription>Supplier research is {job?.status ?? 'not started'}.</EmptyDescription></EmptyHeader></Empty>}
+          {job?.lastError && <p className="text-sm text-destructive">{job.lastError}</p>}
+        </TabsContent>
+      </Tabs>
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><CheckCircle2Icon className="size-3.5" /><span>Your company identity stays private until a bid is approved.</span><ChevronRightIcon className="size-3.5" /><span>Approval creates a draft purchase order.</span></div>
     </div>

@@ -45,6 +45,9 @@
   --danger: var(--destructive);
   --warning: oklch(0.66 0.16 70);
   --font-system: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  --landing-image-tint: oklch(1 0 0 / 8%);
+  --landing-inverse: oklch(0.16 0.01 260);
+  --landing-inverse-foreground: oklch(0.97 0.004 260);
 }
 
 @theme inline {
@@ -124,6 +127,9 @@
   --sidebar-accent-foreground: oklch(0.96 0.004 260);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: oklch(0.72 0.012 260);
+  --landing-image-tint: oklch(0.1 0.012 260 / 34%);
+  --landing-inverse: oklch(0.13 0.008 260);
+  --landing-inverse-foreground: oklch(0.97 0.004 260);
 }
 
 @layer base {
@@ -153,6 +159,38 @@
 }
 
 @layer components {
+  .landing-hero-image-tint {
+    background: var(--landing-image-tint);
+  }
+
+  .landing-inverse {
+    --background: var(--landing-inverse);
+    --foreground: var(--landing-inverse-foreground);
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  .landing-hero-scrim {
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--background) 99%, transparent) 0%,
+      color-mix(in oklch, var(--background) 94%, transparent) 32%,
+      color-mix(in oklch, var(--background) 48%, transparent) 57%,
+      transparent 78%
+    );
+  }
+
+  @media (max-width: 767px) {
+    .landing-hero-scrim {
+      background: linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--background) 98%, transparent) 0%,
+        color-mix(in oklch, var(--background) 92%, transparent) 62%,
+        color-mix(in oklch, var(--background) 40%, transparent) 100%
+      );
+    }
+  }
+
   .dialog-scroll-region {
     scrollbar-color: color-mix(in oklch, var(--foreground) 28%, transparent) transparent;
     scrollbar-gutter: stable;
