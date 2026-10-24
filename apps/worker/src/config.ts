@@ -41,6 +41,9 @@ const Env = z.object({
    *  entirely rather than crashing the worker on startup; see ConsumerDeps.research. */
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-3.8-flash'),
+  /** Grounded search regularly takes longer than a normal generation. Keep this above the observed
+   * production p99 while still bounding a stalled upstream request. */
+  GEMINI_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(10_000).max(180_000).default(60_000),
   GOOGLE_PLACES_API_KEY: z.string().optional(),
   SUPPLIER_RESEARCH_MAX_CANDIDATES: z.coerce.number().int().positive().default(5),
   /** INR micros. Token prices are per one million tokens; search/details prices are per billable event. */

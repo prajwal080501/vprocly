@@ -32,6 +32,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ItemClarificationDialog } from '@/components/item-clarification-dialog';
+import { SupplierResearchAnimation } from '@/components/supplier-research-animation';
 import { CardDescription, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -357,6 +358,7 @@ export function SourcingDetailView({ request, currency, initialLineId }: { reque
     return itemDifference || (right.supplierScore?.overallScore ?? -1) - (left.supplierScore?.overallScore ?? -1);
   }), [line]);
   const job = line?.researchJob;
+  const isResearchActive = job?.status === 'queued' || job?.status === 'researching';
   const canRetry = Boolean(line && job && (job.status === 'failed' || job.status === 'partial') && suppliers.length < job.targetCount && line.status === 'open');
 
   function selectLine(lineId: string) {
@@ -409,12 +411,12 @@ export function SourcingDetailView({ request, currency, initialLineId }: { reque
             </div>
             <PriceIntelligencePanel intelligence={line.priceIntelligence} />
             <BidsTable key={line.id} requestId={request.id} line={line} bids={bids} currency={currency} bestPrice={bestPrice} fastestLead={fastestLead} />
-          </> : <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><CircleDollarSignIcon /></EmptyMedia><EmptyTitle>Waiting for supplier bids</EmptyTitle><EmptyDescription>Notified suppliers can submit quotes while this item remains open.</EmptyDescription></EmptyHeader></Empty>}
+          </> : isResearchActive ? <SupplierResearchAnimation itemCode={line.itemCode} location={`${line.deliveryCity}, ${line.deliveryState}`} status={job.status as 'queued' | 'researching'} /> : <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><CircleDollarSignIcon /></EmptyMedia><EmptyTitle>Waiting for supplier bids</EmptyTitle><EmptyDescription>Notified suppliers can submit quotes while this item remains open.</EmptyDescription></EmptyHeader></Empty>}
         </TabsContent>
 
         <TabsContent value="outreach" className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{suppliers.length} suppliers discovered or invited for this item.</p>{canRetry && <RetryResearchButton requestId={request.id} lineId={line.id} />}</div>
-          {suppliers.length ? <div className="overflow-hidden rounded-lg border">{suppliers.map((supplier) => <OutreachRow key={supplier.id} requestId={request.id} supplier={supplier} messages={(line.clarificationMessages ?? []).filter((message) => message.platformSupplierId === supplier.platformSupplierId)} />)}</div> : <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><UsersIcon /></EmptyMedia><EmptyTitle>No suppliers yet</EmptyTitle><EmptyDescription>Supplier research is {job?.status ?? 'not started'}.</EmptyDescription></EmptyHeader></Empty>}
+          {suppliers.length ? <div className="overflow-hidden rounded-lg border">{suppliers.map((supplier) => <OutreachRow key={supplier.id} requestId={request.id} supplier={supplier} messages={(line.clarificationMessages ?? []).filter((message) => message.platformSupplierId === supplier.platformSupplierId)} />)}</div> : isResearchActive ? <SupplierResearchAnimation itemCode={line.itemCode} location={`${line.deliveryCity}, ${line.deliveryState}`} status={job.status as 'queued' | 'researching'} /> : <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><UsersIcon /></EmptyMedia><EmptyTitle>No suppliers yet</EmptyTitle><EmptyDescription>Supplier research is {job?.status ?? 'not started'}.</EmptyDescription></EmptyHeader></Empty>}
           {job?.lastError && <p className="text-sm text-destructive">{job.lastError}</p>}
         </TabsContent>
 

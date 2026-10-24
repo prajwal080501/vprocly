@@ -11,6 +11,10 @@ export type ConsumerDefinition<P = void> = {
   /** e.g. 'vprocly.*.master_data.supplier_created.v1' */
   filterSubjects: string[];
   maxDeliver?: number;
+  /** Override for consumers whose bounded external work legitimately takes more than one minute. */
+  ackWaitMs?: number;
+  /** Permanent failures can opt out of redelivery and move directly to the DLQ. */
+  shouldRetry?: (error: unknown) => boolean;
   /**
    * Slow or external work (object storage, virus scan, HTTP) done before the transaction so no DB
    * transaction is held open while it runs. May run again on redelivery, so it must be idempotent.
@@ -63,7 +67,7 @@ export async function ensureConsumer(nc: NatsConnection, def: AnyConsumer): Prom
     deliver_policy: DeliverPolicy.All,
     filter_subjects: def.filterSubjects,
     max_deliver: def.maxDeliver ?? RETRY_DELAYS_MS.length + 1,
-    ack_wait: 60_000_000_000,
+    ack_wait: (def.ackWaitMs ?? 60_000) * 1_000_000,
   };
   try {
     await jsm.consumers.info(EVENTS_STREAM, def.name);
@@ -118,6 +122,7 @@ async function processMessage(js: JetStreamClient, db: Database, def: AnyConsume
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     const attempt = msg.info.deliveryCount;
+    const retryable = def.shouldRetry?.(err) ?? true;
     try {
       await def.onError?.(parsed.data, err);
     } catch (hookError) {
@@ -133,11 +138,12 @@ async function processMessage(js: JetStreamClient, db: Database, def: AnyConsume
         ...operationalFields(parsed.data.payload),
         attempt,
         maxDeliver,
+        retryable,
         error: reason,
       };
     console.error(JSON.stringify(fields));
     void alertWorker(`consumer:${def.name}`, `Worker consumer ${def.name} failed`, fields);
-    if (attempt >= maxDeliver) {
+    if (!retryable || attempt >= maxDeliver) {
       await deadLetter(js, def, msg, reason);
     } else {
       msg.nak(RETRY_DELAYS_MS[Math.min(attempt - 1, RETRY_DELAYS_MS.length - 1)]);

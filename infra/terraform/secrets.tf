@@ -73,6 +73,7 @@ locals {
     RAZORPAY_KEY_SECRET                    = var.reused_secrets.razorpay_key_secret
     RAZORPAY_WEBHOOK_SECRET                = var.reused_secrets.razorpay_webhook_secret
     GEMINI_API_KEY                         = var.reused_secrets.gemini_api_key
+    GEMINI_REQUEST_TIMEOUT_MS              = "60000"
     # INR micros based on Gemini 3.8 Flash / Google Maps India list prices on 2026-10-24. Token rates
     # are per 1M tokens; grounding and Place Details are per billable event. Free allowances excluded.
     GEMINI_INPUT_COST_MICROS_PER_MILLION   = "71301825"

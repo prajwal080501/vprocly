@@ -42,6 +42,7 @@ const research =
     ? new GeminiPlacesResearchClient({
         geminiApiKey: config.GEMINI_API_KEY,
         geminiModel: config.GEMINI_MODEL,
+        geminiRequestTimeoutMs: config.GEMINI_REQUEST_TIMEOUT_MS,
         placesApiKey: config.GOOGLE_PLACES_API_KEY,
         geminiInputCostMicrosPerMillion: config.GEMINI_INPUT_COST_MICROS_PER_MILLION,
         geminiOutputCostMicrosPerMillion: config.GEMINI_OUTPUT_COST_MICROS_PER_MILLION,

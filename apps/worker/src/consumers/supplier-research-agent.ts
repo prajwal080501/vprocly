@@ -21,6 +21,7 @@ import {
 } from '@vprocly/db';
 import { and, eq, gt, inArray, or, sql } from 'drizzle-orm';
 import type { ConsumerDefinition } from '../consumer.js';
+import { isRetryableSupplierResearchError } from '../research/gemini-places-client.js';
 import type { SupplierCandidate, SupplierResearchClient, SupplierResearchMetrics } from '../research/supplier-research-client.js';
 
 /**
@@ -69,6 +70,10 @@ export function supplierResearchAgent(
     filterSubjects: ['vprocly.*.sourcing.sourcing_line_unmatched.v1'],
     // Lower than the default (6): bounds worst-case paid Gemini/Places spend per event before it dead-letters.
     maxDeliver: 3,
+    // A complete bounded research plan can include several grounded searches and Places calls. This must
+    // exceed the per-request Gemini deadline to prevent concurrent redelivery while work is still active.
+    ackWaitMs: 15 * 60_000,
+    shouldRetry: isRetryableSupplierResearchError,
     async prepare(event) {
       const categoryId = String(event.payload.categoryId);
       const sourcingLineId = String(event.payload.sourcingLineId);

@@ -1,9 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GeminiPlacesResearchClient } from '../src/research/gemini-places-client.js';
+import { GeminiPlacesResearchClient, isRetryableSupplierResearchError } from '../src/research/gemini-places-client.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('GeminiPlacesResearchClient', () => {
+  it('retries transient failures but not permanent project billing or configuration errors', () => {
+    expect(isRetryableSupplierResearchError(new Error('The operation was aborted due to timeout'))).toBe(true);
+    expect(isRetryableSupplierResearchError(new Error('returned HTTP 429: rate limit exceeded'))).toBe(true);
+    expect(isRetryableSupplierResearchError(new Error('returned HTTP 429: project exceeded its monthly spending cap'))).toBe(false);
+    expect(isRetryableSupplierResearchError(new Error('returned HTTP 401: invalid API key'))).toBe(false);
+  });
+
   it('stops the bounded loop after an exact-code pass yields enough verified suppliers', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);

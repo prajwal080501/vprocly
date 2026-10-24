@@ -6,6 +6,7 @@ const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
 type GeminiConfig = {
   geminiApiKey: string;
   geminiModel: string;
+  geminiRequestTimeoutMs?: number;
   placesApiKey: string;
   geminiInputCostMicrosPerMillion?: number;
   geminiOutputCostMicrosPerMillion?: number;
@@ -171,7 +172,7 @@ export class GeminiPlacesResearchClient implements SupplierResearchClient {
         `https://generativelanguage.googleapis.com/v1beta/models/${this.config.geminiModel}:generateContent?key=${this.config.geminiApiKey}`,
         {
           method: 'POST',
-          signal: AbortSignal.timeout(20_000),
+          signal: AbortSignal.timeout(this.config.geminiRequestTimeoutMs ?? 60_000),
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             contents: [
@@ -293,7 +294,7 @@ Do not invent codes, URLs, authorization, stock, or capabilities. Use empty arra
         `https://generativelanguage.googleapis.com/v1beta/models/${this.config.geminiModel}:generateContent?key=${this.config.geminiApiKey}`,
         {
           method: 'POST',
-          signal: AbortSignal.timeout(20_000),
+          signal: AbortSignal.timeout(this.config.geminiRequestTimeoutMs ?? 60_000),
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: `What is a public contact or sales email address for the business at ${website}? Reply with only the email address, or "none" if you cannot find one.` }] }],
@@ -385,4 +386,11 @@ async function upstreamError(service: string, response: Response): Promise<Error
 function contextualError(message: string, error: unknown): Error {
   const detail = error instanceof Error ? error.message : String(error);
   return new Error(`${message}: ${detail}`, { cause: error });
+}
+
+/** Permanent project/configuration failures cannot improve on queue redelivery. Rate limits and timeouts
+ * remain retryable because they are transient; an explicit monthly spending cap does not. */
+export function isRetryableSupplierResearchError(error: unknown): boolean {
+  const detail = error instanceof Error ? error.message : String(error);
+  return !/monthly spending cap|HTTP (?:400|401|403|404)\b/i.test(detail);
 }
