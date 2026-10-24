@@ -47,6 +47,12 @@ data:
   NOREPLY_SMTP_FROM: {{ .Values.config.smtpNoreplyFrom | quote }}
   EMAIL_DELIVERY_MODE: {{ .Values.config.emailDeliveryMode | quote }}
   VOICE_DELIVERY_MODE: {{ .Values.config.voiceDeliveryMode | quote }}
+  GEMINI_MODEL: {{ .Values.config.geminiModel | quote }}
+  SUPPLIER_RESEARCH_MAX_CANDIDATES: {{ .Values.config.supplierResearchMaxCandidates | quote }}
+  GEMINI_INPUT_COST_MICROS_PER_MILLION: {{ .Values.config.geminiInputCostMicrosPerMillion | quote }}
+  GEMINI_OUTPUT_COST_MICROS_PER_MILLION: {{ .Values.config.geminiOutputCostMicrosPerMillion | quote }}
+  GEMINI_SEARCH_COST_MICROS: {{ .Values.config.geminiSearchCostMicros | quote }}
+  GOOGLE_PLACE_DETAILS_COST_MICROS: {{ .Values.config.googlePlaceDetailsCostMicros | quote }}
   {{- with .Values.config.sarvamOrgId }}
   SARVAM_ORG_ID: {{ . | quote }}
   {{- end }}
@@ -57,6 +63,7 @@ data:
   SARVAM_APP_ID: {{ . | quote }}
   {{- end }}
   SARVAM_APP_VERSION: {{ .Values.config.sarvamAppVersion | quote }}
+  SARVAM_CAMPAIGN_NAME: {{ .Values.config.sarvamCampaignName | quote }}
   {{- with .Values.config.sarvamConnectionId }}
   SARVAM_CONNECTION_ID: {{ . | quote }}
   {{- end }}

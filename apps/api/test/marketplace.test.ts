@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { createInviteToken } from '@vprocly/contracts';
 import {
   bids,
+  bidRevisions,
   categories,
   createDatabase,
   createPool,
@@ -10,13 +11,16 @@ import {
   outbox,
   platformSuppliers,
   purchaseOrders,
+  purchaseOrderOutcomes,
   sourcingLineNotifications,
   sourcingLines,
   sourcingResearchJobs,
   sourcingRequests,
   suppliers,
   supplierCategories,
+  supplierCapabilities,
   supplierMembers,
+  supplierScoreSnapshots,
   supplierVoiceCalls,
   walletBalances,
   withTenant,
@@ -28,6 +32,7 @@ import { createTestApp, decodeJwtClaims, tokenFor, tokenForCredentials } from '.
 import { BID_FEE_POINTS } from '../src/modules/marketplace-suppliers/wallet.service.js';
 
 const ACME = '11111111-1111-4111-8111-111111111111';
+const MAILPIT_API = process.env.MAILPIT_API ?? 'http://localhost:58025';
 
 let app: INestApplication;
 let http: ReturnType<typeof request>;
@@ -47,6 +52,36 @@ afterAll(async () => {
 });
 
 const as = (user: keyof typeof tokens) => ({ Authorization: `Bearer ${tokens[user]}` });
+
+async function otpFromMail(email: string): Promise<string> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const list = (await (await fetch(`${MAILPIT_API}/api/v1/messages`)).json()) as { messages: { ID: string; To: { Address: string }[] }[] };
+    const hit = list.messages.find((message) => message.To.some((to) => to.Address === email));
+    if (hit) {
+      const message = (await (await fetch(`${MAILPIT_API}/api/v1/message/${hit.ID}`)).json()) as { Text: string };
+      const code = message.Text.match(/verification code is (\d{6})/)?.[1];
+      if (code) return code;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`OTP email was not received for ${email}`);
+}
+
+async function verifySelfSignupEmail(email: string): Promise<string> {
+  await http.post('/api/supplier-signup/otp/request').send({ email }).expect(201);
+  const code = await otpFromMail(email);
+  const verified = await http.post('/api/supplier-signup/otp/verify').send({ email, code }).expect(201);
+  return verified.body.verificationToken as string;
+}
+
+async function verifyInviteEmail(inviteToken: string, email: string): Promise<string> {
+  await http.post(`/api/invites/${inviteToken}/otp/request`).send({}).expect(201);
+  const code = await otpFromMail(email);
+  const wrongCode = code === '000000' ? '999999' : '000000';
+  await http.post(`/api/invites/${inviteToken}/otp/verify`).send({ code: wrongCode }).expect(400);
+  const verified = await http.post(`/api/invites/${inviteToken}/otp/verify`).send({ code }).expect(201);
+  return verified.body.verificationToken as string;
+}
 
 /** Inserts a notification row with a known raw token, bypassing the mailer -- mirrors how the mailer would
  *  fill it in once it actually sends the email (see apps/worker/src/consumers/sourcing-invite-mailer.ts). */
@@ -164,6 +199,25 @@ describe('sourcing: manual creation, matching, isolation, audit and events', () 
       foundCount: Math.min(notifications.length, 5),
     });
     expect(['queued', 'partial', 'completed']).toContain(detail.body.lines[0].researchJob.status);
+  });
+
+  it('appends manual items to an existing open custom request instead of creating a duplicate', async () => {
+    const title = `Maintenance batch ${randomUUID().slice(0, 8)}`;
+    const line = (description: string) => ({ description, category: STEEL_CATEGORY, qty: 1, uom: 'NOS', deliveryCity: city, deliveryState: 'TestState' });
+    const created = await http.post('/api/sourcing-requests').set(as('bob')).send({ title, lines: [line('First custom item')] }).expect(201);
+    expect(created.body.appended).toBe(false);
+
+    const appended = await http
+      .post('/api/sourcing-requests')
+      .set(as('bob'))
+      .send({ title, sourcingRequestId: created.body.sourcingRequestId, lines: [line('Second custom item')] })
+      .expect(201);
+    expect(appended.body).toMatchObject({ sourcingRequestId: created.body.sourcingRequestId, title, lineCount: 1, appended: true });
+
+    const detail = await http.get(`/api/sourcing-requests/${created.body.sourcingRequestId}`).set(as('bob')).expect(200);
+    expect(detail.body.lines.map((item: { description: string }) => item.description)).toEqual(expect.arrayContaining(['First custom item', 'Second custom item']));
+    const list = await http.get('/api/sourcing-requests').set(as('bob')).expect(200);
+    expect(list.body.filter((requestRow: { title: string }) => requestRow.title === title)).toHaveLength(1);
   });
 
   it('lets a buyer retry a failed or partial research job', async () => {
@@ -460,9 +514,11 @@ describe('supplier invites: blind identity, signup, wallet grant, replay protect
 
   it('signs up (with multiple categories), grants 1000 points, and the account can log in with platform_supplier_id and no tenant_id', async () => {
     const password = 'a-very-long-supplier-password';
+    const phone = '+919876543210';
+    const verificationToken = await verifyInviteEmail(token, email);
     const res = await http
       .post(`/api/invites/${token}/signup`)
-      .send({ name: 'New Supplier Co', gst: '27AAAAA0000A1Z5', categories: [STEEL_CATEGORY, 'Bearings & Power Transmission'], city: 'Pune', state: 'Maharashtra', password })
+      .send({ name: 'New Supplier Co', phone, categories: [STEEL_CATEGORY, 'Bearings & Power Transmission'], city: 'Pune', state: 'Maharashtra', password, verificationToken })
       .expect(201);
     expect(res.body).toEqual({ platformSupplierId: expect.stringMatching(/^[0-9a-f-]{36}$/), walletBalance: 1000 });
 
@@ -482,18 +538,20 @@ describe('supplier invites: blind identity, signup, wallet grant, replay protect
     // signup only ever wrote one before this.
     const supplierCats = await db.select().from(supplierCategories).where(eq(supplierCategories.platformSupplierId, res.body.platformSupplierId));
     expect(supplierCats).toHaveLength(2);
+    const [supplier] = await db.select().from(platformSuppliers).where(eq(platformSuppliers.id, res.body.platformSupplierId));
+    expect(supplier).toMatchObject({ gst: null, phone });
   });
 
   it('is consumed and cannot be replayed', async () => {
     const view = await http.get(`/api/invites/${token}`).expect(200);
     expect(view.body).toEqual({ status: 'consumed' });
 
-    await http.post(`/api/invites/${token}/signup`).send({ name: 'X', gst: 'X', categories: [STEEL_CATEGORY], city: 'X', state: 'X', password: 'longenough1' }).expect(409);
+    await http.post(`/api/invites/${token}/signup`).send({ name: 'X', gst: 'X', categories: [STEEL_CATEGORY], city: 'X', state: 'X', password: 'longenough1', verificationToken: 'x'.repeat(32) }).expect(409);
   });
 
   it('refuses to register the same email twice via a second invite', async () => {
     const secondToken = await seedInvite(sourcingLineId, email);
-    await http.post(`/api/invites/${secondToken}/signup`).send({ name: 'X', gst: 'X', categories: [STEEL_CATEGORY], city: 'X', state: 'X', password: 'longenough1' }).expect(409);
+    await http.post(`/api/invites/${secondToken}/signup`).send({ name: 'X', gst: 'X', categories: [STEEL_CATEGORY], city: 'X', state: 'X', password: 'longenough1', verificationToken: 'x'.repeat(32) }).expect(409);
   });
 });
 
@@ -524,9 +582,10 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
   });
 
   it('creates an account with no invite token, collecting name/gst/email/city/state/country', async () => {
+    const verificationToken = await verifySelfSignupEmail(email);
     const res = await http
       .post('/api/supplier-signup')
-      .send({ name: 'Self Serve Co', gst: '27AAAAA0000A1Z5', email, categories: [STEEL_CATEGORY], city: 'Pune', state: 'Maharashtra', country: 'India', password })
+      .send({ name: 'Self Serve Co', gst: '27AAAAA0000A1Z5', email, categories: [STEEL_CATEGORY], city: 'Pune', state: 'Maharashtra', country: 'India', password, verificationToken })
       .expect(201);
     expect(res.body).toEqual({ platformSupplierId: expect.stringMatching(/^[0-9a-f-]{36}$/), walletBalance: 1000 });
     platformSupplierId = res.body.platformSupplierId;
@@ -535,7 +594,7 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
   it('refuses a duplicate email', async () => {
     await http
       .post('/api/supplier-signup')
-      .send({ name: 'X', gst: 'X', email, categories: [STEEL_CATEGORY], city: 'X', state: 'X', country: 'X', password })
+      .send({ name: 'X', gst: 'X', email, categories: [STEEL_CATEGORY], city: 'X', state: 'X', country: 'X', password, verificationToken: 'x'.repeat(32) })
       .expect(409);
   });
 
@@ -546,7 +605,7 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
     expect(claims).toMatchObject({ platform_supplier_id: platformSupplierId, roles: expect.arrayContaining(['supplier']) });
 
     const me = await http.get('/api/supplier/me').set(supplierAuth()).expect(200);
-    expect(me.body).toEqual({ name: 'Self Serve Co', email, phone: null, city: 'Pune', state: 'Maharashtra', country: 'India', walletBalance: 1000 });
+    expect(me.body).toEqual({ id: platformSupplierId, name: 'Self Serve Co', email, phone: null, city: 'Pune', state: 'Maharashtra', country: 'India', walletBalance: 1000, verified: false });
   });
 
   it('lets a supplier add/update their own mobile number, so the buyer-side "Call" button has something to dial', async () => {
@@ -555,6 +614,48 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
     expect(updated.body.phone).toBe(phone);
     const refetched = await http.get('/api/supplier/me').set(supplierAuth()).expect(200);
     expect(refetched.body.phone).toBe(phone);
+  });
+
+  it('maintains a reusable normalized supplier passport', async () => {
+    const initial = await http.get('/api/supplier/passport').set(supplierAuth()).expect(200);
+    expect(initial.body).toMatchObject({ completionPercent: expect.any(Number) });
+    const categoryId = await steelCategoryId();
+    const passportGst = `27TEST${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
+    const passportPhone = '+919900001234';
+    const updated = await http.patch('/api/supplier/passport').set(supplierAuth()).send({
+      identifiers: [{ type: 'gstin', value: passportGst }, { type: 'udyam', value: `UDYAM-${randomUUID().slice(0, 8)}` }],
+      locations: [{ type: 'factory', city: 'Pune', state: 'Maharashtra', country: 'India', isPrimary: true }],
+      capabilities: [{ categoryId, description: 'Precision steel parts', materials: ['Steel'], processes: ['CNC'] }],
+      certifications: [{ name: 'ISO 9001' }],
+      contacts: [{ name: 'Sales Desk', email, phone: passportPhone, preferredChannel: 'voice', isPrimary: true }],
+    }).expect(200);
+    expect(updated.body).toMatchObject({ completionPercent: 100 });
+    expect(updated.body.contacts).toContainEqual(expect.objectContaining({ phone: passportPhone, isPrimary: true }));
+    expect(updated.body.capabilities).toContainEqual(expect.objectContaining({ categoryId, categoryName: STEEL_CATEGORY }));
+    const me = await http.get('/api/supplier/me').set(supplierAuth()).expect(200);
+    expect(me.body.phone).toBe(passportPhone);
+    const capabilities = await db.select().from(supplierCapabilities).where(eq(supplierCapabilities.platformSupplierId, platformSupplierId));
+    expect(capabilities).toHaveLength(1);
+  });
+
+  it('exposes aggregate network intelligence and validates alert preferences', async () => {
+    const initial = await http.get('/api/supplier/network-insights').set(supplierAuth()).expect(200);
+    expect(initial.body).toMatchObject({
+      totalOpportunities: expect.any(Number),
+      activeOpportunities: expect.any(Number),
+      categoryDemand: expect.any(Array),
+      score: expect.objectContaining({ overall: expect.any(Number), version: expect.any(Number) }),
+      preferences: { opportunityAlerts: true, digestFrequency: 'instant', minimumRecommendationScore: 0 },
+    });
+    const updated = await http.patch('/api/supplier/network-preferences').set(supplierAuth()).send({
+      opportunityAlerts: true,
+      digestFrequency: 'daily',
+      minimumRecommendationScore: 65,
+    }).expect(200);
+    expect(updated.body.preferences).toMatchObject({ digestFrequency: 'daily', minimumRecommendationScore: 65 });
+    await http.patch('/api/supplier/network-preferences').set(supplierAuth()).send({ opportunityAlerts: true, digestFrequency: 'hourly', minimumRecommendationScore: 65 }).expect(400);
+    const scores = await db.select().from(supplierScoreSnapshots).where(eq(supplierScoreSnapshots.platformSupplierId, platformSupplierId));
+    expect(scores.length).toBeGreaterThan(0);
   });
 
   it('cannot reach the buyer-only /me, and a buyer token cannot reach /supplier/me (guards never overlap)', async () => {
@@ -576,10 +677,69 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
 
     const after = await http.get('/api/supplier/lines').set(supplierAuth()).expect(200);
     expect(after.body).toEqual([
-      { sourcingLineId, itemCode: 'DASH-1', description: 'Dashboard test item', qty: '3.000', uom: 'NOS', needBy: '2026-12-01', alreadyBid: false, myUnitPrice: null, myMinimumOrderQty: null },
+      {
+        sourcingLineId,
+        itemCode: 'DASH-1',
+        description: 'Dashboard test item',
+        qty: '3.000',
+        uom: 'NOS',
+        needBy: '2026-12-01',
+        alreadyBid: false,
+        myUnitPrice: null,
+        myMinimumOrderQty: null,
+        capabilityResponse: null,
+        clarificationCount: 0,
+      },
     ]);
     const flat = JSON.stringify(after.body).toLowerCase();
     for (const forbidden of ['acme', 'tenant', 'buyer']) expect(flat).not.toContain(forbidden);
+  });
+
+  it('keeps capability and clarification chat scoped to one item and supplier', async () => {
+    const capability = await http
+      .post(`/api/supplier/lines/${sourcingLineId}/capability`)
+      .set(supplierAuth())
+      .send({ status: 'needs_clarification', reason: 'Please confirm the material grade' })
+      .expect(201);
+    expect(capability.body).toMatchObject({ status: 'needs_clarification' });
+
+    await http
+      .post(`/api/supplier/lines/${sourcingLineId}/clarifications`)
+      .set(supplierAuth())
+      .send({ message: 'Is IS 2062 E250 acceptable for this item?' })
+      .expect(201);
+
+    let detail = await http.get(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(200);
+    expect(detail.body.lines[0].supplierResearch).toContainEqual(expect.objectContaining({
+      platformSupplierId,
+      capabilityResponse: expect.objectContaining({ status: 'needs_clarification', reason: 'Please confirm the material grade' }),
+    }));
+    expect(detail.body.lines[0].clarificationMessages).toContainEqual(expect.objectContaining({
+      platformSupplierId,
+      senderType: 'supplier',
+      body: 'Is IS 2062 E250 acceptable for this item?',
+    }));
+
+    await http
+      .post(`/api/sourcing-requests/${sourcingRequestId}/lines/${sourcingLineId}/clarifications`)
+      .set(as('bob'))
+      .send({ platformSupplierId, message: 'Yes, IS 2062 E250 is acceptable.' })
+      .expect(201);
+
+    const thread = await http.get('/api/supplier/clarifications').set(supplierAuth()).expect(200);
+    expect(thread.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourcingLineId, senderType: 'supplier', body: 'Is IS 2062 E250 acceptable for this item?' }),
+      expect.objectContaining({ sourcingLineId, senderType: 'buyer', senderLabel: 'Buyer team', body: 'Yes, IS 2062 E250 is acceptable.' }),
+    ]));
+    expect(JSON.stringify(thread.body).toLowerCase()).not.toContain('acme');
+
+    detail = await http.get(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(200);
+    expect(detail.body.lines[0].clarificationMessages).toHaveLength(2);
+    const lines = await http.get('/api/supplier/lines').set(supplierAuth()).expect(200);
+    expect(lines.body[0]).toMatchObject({
+      capabilityResponse: { status: 'needs_clarification', reason: 'Please confirm the material grade' },
+      clarificationCount: 2,
+    });
   });
 
   it('sees an explicit email invite even when it remains unlinked for manual-email routing', async () => {
@@ -612,6 +772,8 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
       .expect(201);
     const detail = await http.get(`/api/sourcing-requests/${other.body.sourcingRequestId}`).set(as('bob')).expect(200);
     await http.post(`/api/supplier/lines/${detail.body.lines[0].id}/bids`).set(supplierAuth()).send({ unitPrice: 10 }).expect(403);
+    await http.post(`/api/supplier/lines/${detail.body.lines[0].id}/clarifications`).set(supplierAuth()).send({ message: 'Can I supply this?' }).expect(403);
+    await http.post(`/api/supplier/lines/${detail.body.lines[0].id}/capability`).set(supplierAuth()).send({ status: 'can_supply' }).expect(403);
   });
 
   it('rejects invalid bid input', async () => {
@@ -633,6 +795,11 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
 
     lines = await http.get('/api/supplier/lines').set(supplierAuth()).expect(200);
     expect(lines.body[0]).toMatchObject({ alreadyBid: true, myUnitPrice: '440.00', myMinimumOrderQty: '50.000' });
+    const revisions = await withTenant(db, { tenantId: ACME }, (tx) => tx.select().from(bidRevisions).where(eq(bidRevisions.bidId, submittedBidId)));
+    expect(revisions).toEqual([
+      expect.objectContaining({ revisionNumber: 1, source: 'portal', unitPrice: '452.50' }),
+      expect.objectContaining({ revisionNumber: 2, source: 'portal', unitPrice: '440.00' }),
+    ]);
   });
 
   it('rejects a new bid when the wallet balance is insufficient, without creating a partial bid or touching the balance', async () => {
@@ -664,9 +831,10 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
   it('accepts one bid atomically, creates a vendor and draft PO, and reveals the buyer only to the winner', async () => {
     const losingEmail = `losing-${randomUUID().slice(0, 8)}@example.com`;
     const losingPassword = 'another-long-supplier-password';
+    const verificationToken = await verifySelfSignupEmail(losingEmail);
     const signup = await http
       .post('/api/supplier-signup')
-      .send({ name: 'Runner Up Co', gst: '27BBBBB0000B1Z5', email: losingEmail, categories: [STEEL_CATEGORY], city: 'Mumbai', state: 'Maharashtra', country: 'India', password: losingPassword })
+      .send({ name: 'Runner Up Co', gst: '27BBBBB0000B1Z5', email: losingEmail, categories: [STEEL_CATEGORY], city: 'Mumbai', state: 'Maharashtra', country: 'India', password: losingPassword, verificationToken })
       .expect(201);
     const losingSupplierId = signup.body.platformSupplierId as string;
     const losingToken = await tokenForCredentials(losingEmail, losingPassword);
@@ -685,6 +853,11 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
       .set(as('bob'))
       .expect(201);
     expect(award.body).toMatchObject({ bidId: submittedBidId, sourcingLineId, status: 'accepted' });
+    await http
+      .post(`/api/sourcing-requests/${sourcingRequestId}/lines/${sourcingLineId}/purchase-orders/${award.body.purchaseOrderId}/outcomes`)
+      .set(as('bob'))
+      .send({ type: 'delivered', quantity: 3, rating: 5, notes: 'Delivered on time' })
+      .expect(201);
 
     const state = await withTenant(db, { tenantId: ACME }, async (tx) => ({
       bidRows: await tx.select().from(bids).where(eq(bids.sourcingLineId, sourcingLineId)),
@@ -695,10 +868,18 @@ describe('supplier dashboard: self-serve signup, login, open lines, bidding', ()
     }));
     expect(state.bidRows.find((bid) => bid.id === submittedBidId)?.status).toBe('accepted');
     expect(state.bidRows.find((bid) => bid.id === losingBid.body.bidId)?.status).toBe('rejected');
-    expect(state.poRows).toEqual([expect.objectContaining({ acceptedBidId: submittedBidId, status: 'draft', unitPrice: '440.00' })]);
+    expect(state.poRows).toEqual([expect.objectContaining({ acceptedBidId: submittedBidId, status: 'delivered', unitPrice: '440.00' })]);
     expect(state.vendorRows).toEqual([expect.objectContaining({ sourceSystem: 'marketplace', email })]);
     expect(state.lineRows[0]?.status).toBe('awarded');
     expect(state.requestRows[0]?.status).toBe('closed');
+    const outcomes = await withTenant(db, { tenantId: ACME }, (tx) => tx.select().from(purchaseOrderOutcomes).where(eq(purchaseOrderOutcomes.purchaseOrderId, award.body.purchaseOrderId)));
+    expect(outcomes).toEqual([expect.objectContaining({ type: 'delivered', quantity: '3.000', rating: 5, notes: 'Delivered on time' })]);
+    const buyerDetail = await http.get(`/api/sourcing-requests/${sourcingRequestId}`).set(as('bob')).expect(200);
+    expect(buyerDetail.body.lines[0].purchaseOrder).toMatchObject({ id: award.body.purchaseOrderId, status: 'delivered', outcomes: [expect.objectContaining({ type: 'delivered' })] });
+    expect(buyerDetail.body.lines[0]).toMatchObject({
+      priceIntelligence: { benchmark: null, privacyThreshold: { minimumQuotes: 5, minimumBuyers: 3, met: false } },
+      bids: expect.arrayContaining([expect.objectContaining({ supplierScore: expect.objectContaining({ overallScore: expect.any(Number), components: expect.any(Object) }), landedUnitCost: expect.any(Number) })]),
+    });
 
     const winnerView = await http.get('/api/supplier/bids').set(supplierAuth()).expect(200);
     expect(winnerView.body[0]).toMatchObject({ bidId: submittedBidId, status: 'accepted', buyer: { name: expect.any(String), contactEmail: expect.any(String) } });

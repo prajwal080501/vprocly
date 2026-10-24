@@ -43,6 +43,11 @@ const Env = z.object({
   GEMINI_MODEL: z.string().default('gemini-3.8-flash'),
   GOOGLE_PLACES_API_KEY: z.string().optional(),
   SUPPLIER_RESEARCH_MAX_CANDIDATES: z.coerce.number().int().positive().default(5),
+  /** INR micros. Token prices are per one million tokens; search/details prices are per billable event. */
+  GEMINI_INPUT_COST_MICROS_PER_MILLION: z.coerce.number().int().nonnegative().default(71_301_825),
+  GEMINI_OUTPUT_COST_MICROS_PER_MILLION: z.coerce.number().int().nonnegative().default(356_509_125),
+  GEMINI_SEARCH_COST_MICROS: z.coerce.number().int().nonnegative().default(1_330_967),
+  GOOGLE_PLACE_DETAILS_COST_MICROS: z.coerce.number().int().nonnegative().default(570_415),
   /** Voice calls are capture-only by default. Live mode requires a deployed Sarvam app, telephony
    * connection, public API webhook URL, and a shared webhook secret. */
   VOICE_DELIVERY_MODE: z.enum(['capture', 'live']).default('capture'),
@@ -51,14 +56,14 @@ const Env = z.object({
   SARVAM_ORG_ID: z.string().optional(),
   SARVAM_WORKSPACE_ID: z.string().optional(),
   SARVAM_APP_ID: z.string().optional(),
-  SARVAM_APP_VERSION: z.coerce.number().int().positive().default(1),
+  SARVAM_APP_VERSION: z.coerce.number().int().positive().default(4),
   SARVAM_CONNECTION_ID: z.string().optional(),
   SARVAM_AGENT_PHONE_NUMBER: z.string().optional(),
   SARVAM_WEBHOOK_SECRET: z.string().min(24).optional(),
   /** Batch outbound calling (supplier-outreach-router.ts's automatic path, sarvam-campaign-client.ts). One
    *  long-lived campaign, created once and reused -- these defaults match what was agreed for supplier
    *  outreach and only need overriding for a genuinely different policy. */
-  SARVAM_CAMPAIGN_NAME: z.string().default('vprocly-supplier-outreach'),
+  SARVAM_CAMPAIGN_NAME: z.string().default('vprocly-supplier-notification-v4'),
   SARVAM_CAMPAIGN_ATTEMPTS_PER_SECOND: z.coerce.number().positive().default(1),
   SARVAM_CAMPAIGN_MAX_RETRIES: z.coerce.number().int().min(0).max(20).default(2),
   SARVAM_CAMPAIGN_RETRY_INTERVAL_MINUTES: z.coerce.number().int().positive().default(15),
@@ -66,6 +71,8 @@ const Env = z.object({
   SARVAM_CAMPAIGN_START_TIME: z.string().default('10:00'),
   SARVAM_CAMPAIGN_END_TIME: z.string().default('18:00'),
   SARVAM_CAMPAIGN_DAYS: z.string().default('Monday,Tuesday,Wednesday,Thursday,Friday,Saturday'),
+  RELEASE_VERSION: z.string().default('development'),
+  OPS_ALERT_WEBHOOK_URL: z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional()),
 }).superRefine((env, ctx) => {
   if (env.EMAIL_DELIVERY_MODE === 'live') {
     for (const field of ['SMTP_USER', 'SMTP_PASS', 'NOREPLY_SMTP_USER', 'NOREPLY_SMTP_PASS'] as const) {

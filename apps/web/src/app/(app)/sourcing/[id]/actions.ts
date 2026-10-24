@@ -7,6 +7,31 @@ export type AcceptBidState = { error?: string; success?: boolean };
 export type InviteToLineState = { error?: string; success?: { invitedNewCount: number } };
 export type RetryResearchState = { error?: string; success?: boolean };
 export type ManualOutreachState = { error?: string; success?: boolean };
+export type RecordOutcomeState = { error?: string; success?: boolean };
+export type ClarificationState = { error?: string; success?: boolean };
+
+export async function sendBuyerClarification(
+  requestId: string,
+  lineId: string,
+  platformSupplierId: string,
+  _previous: ClarificationState,
+  formData: FormData,
+): Promise<ClarificationState> {
+  const message = String(formData.get('message') ?? '').trim();
+  if (!message) return { error: 'Enter a message' };
+  if (message.length > 2000) return { error: 'Message must be 2000 characters or less' };
+  try {
+    await api(`/sourcing-requests/${requestId}/lines/${lineId}/clarifications`, {
+      method: 'POST',
+      body: JSON.stringify({ platformSupplierId, message }),
+    });
+    revalidatePath(`/sourcing/${requestId}`);
+    return { success: true };
+  } catch (error) {
+    if (error instanceof ApiError) return { error: (error.body as { message?: string } | null)?.message ?? 'Could not send the message' };
+    return { error: 'Could not send the message' };
+  }
+}
 
 export async function inviteToLine(requestId: string, lineId: string, _previous: InviteToLineState, formData: FormData): Promise<InviteToLineState> {
   const emails = String(formData.get('emails') ?? '')
@@ -89,5 +114,34 @@ export async function manualCall(requestId: string, lineId: string, notification
       return { error: body?.message ?? 'Could not place the call' };
     }
     return { error: 'Could not place the call' };
+  }
+}
+
+export async function recordPurchaseOrderOutcome(requestId: string, lineId: string, purchaseOrderId: string, _previous: RecordOutcomeState, formData: FormData): Promise<RecordOutcomeState> {
+  void _previous;
+  const numberOrNull = (name: string) => {
+    const value = String(formData.get(name) ?? '').trim();
+    return value ? Number(value) : null;
+  };
+  const localDate = (name: string) => {
+    const value = String(formData.get(name) ?? '').trim();
+    return value ? new Date(value).toISOString() : null;
+  };
+  const payload = {
+    type: String(formData.get('type') ?? ''),
+    promisedAt: localDate('promisedAt'),
+    occurredAt: localDate('occurredAt') ?? undefined,
+    quantity: numberOrNull('quantity'),
+    rating: numberOrNull('rating'),
+    reasonCode: String(formData.get('reasonCode') ?? '') || null,
+    notes: String(formData.get('notes') ?? '') || null,
+  };
+  try {
+    await api(`/sourcing-requests/${requestId}/lines/${lineId}/purchase-orders/${purchaseOrderId}/outcomes`, { method: 'POST', body: JSON.stringify(payload) });
+    revalidatePath(`/sourcing/${requestId}`);
+    return { success: true };
+  } catch (error) {
+    if (error instanceof ApiError) return { error: (error.body as { message?: string } | null)?.message ?? 'Could not record this outcome' };
+    return { error: 'Could not record this outcome' };
   }
 }

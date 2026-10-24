@@ -162,6 +162,97 @@
       "when": 1790697900000,
       "tag": "0022_predefined_category_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790780209887,
+      "tag": "0023_parallel_mastermind",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790781000000,
+      "tag": "0024_realtime_dashboard_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790781600000,
+      "tag": "0025_supplier_intelligence_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790782200000,
+      "tag": "0026_bid_commercial_terms",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790782800000,
+      "tag": "0027_bid_revision_commercial_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790877600000,
+      "tag": "0028_supplier_ranking_price_network",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790881200000,
+      "tag": "0029_email_only_supplier_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791045520566,
+      "tag": "0030_groovy_stick",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791430200000,
+      "tag": "0031_supplier_gst_optional",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791432000000,
+      "tag": "0032_supplier_email_otp",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791604800000,
+      "tag": "0033_item_supplier_research_map",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791691200000,
+      "tag": "0034_supplier_research_learning",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792826932000,
+      "tag": "0035_supplier_research_usage_accounting",
+      "breakpoints": true
     }
   ]
 }

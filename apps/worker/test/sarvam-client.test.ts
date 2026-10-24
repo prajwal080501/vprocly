@@ -24,6 +24,7 @@ describe('SarvamVoiceCallClient', () => {
       phone: '+919876543210',
       tenantId: '11111111-1111-4111-8111-111111111111',
       voiceCallId: '22222222-2222-4222-8222-222222222222',
+      buyerCompanyName: 'Buyer Industries',
       supplierName: 'Supplier Co',
       itemDescription: 'Precision bearing',
       quantity: '10.000',
@@ -41,8 +42,9 @@ describe('SarvamVoiceCallClient', () => {
         app_version: 3,
         connection_config: { connection_id: 'connection', agent_phone_number: '+918000000000' },
         agent_variables: {
+          buyer_company_name: 'Buyer Industries',
           supplier_name: 'Supplier Co',
-          item_description: 'Precision bearing\nQuantity: 10.000 NOS\nDelivery: Pune, Maharashtra',
+          item_description: 'Precision bearing\nQuantity: 10.000 NOS\nDelivery: Pune, Maharashtra\nNotify the supplier about this request and ask them to check their email for the secure bidding link. Do not collect bid details during the call.',
         },
       },
       user_config: { user_phone_number: '+919876543210' },
@@ -73,6 +75,7 @@ describe('SarvamVoiceCallClient', () => {
       phone: '9834477319', // exactly the bare national format Sarvam rejected in production
       tenantId: '11111111-1111-4111-8111-111111111111',
       voiceCallId: '22222222-2222-4222-8222-222222222222',
+      buyerCompanyName: 'Buyer Industries',
       supplierName: 'Supplier Co',
       itemDescription: 'Precision bearing',
       quantity: '10.000',

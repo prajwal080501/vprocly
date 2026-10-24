@@ -72,6 +72,30 @@ async function lastMailpitMessageTo(email: string): Promise<{ Text: string; HTML
 }
 
 describe('sourcing manual mailer', () => {
+  it('activates the invite token before SMTP can deliver the email', async () => {
+    const email = `manual-order-${randomUUID().slice(0, 8)}@example.com`;
+    const { lineId, notificationId } = await seedNotification(email, { alreadySent: false });
+    const verifyingTransport = {
+      async sendMail(message: { text?: string }) {
+        const token = message.text?.match(/supplier\/invite\/(\S+)/)?.[1];
+        expect(token).toBeDefined();
+        const [row] = await withTenant(db, { tenantId: ACME }, (tx) =>
+          tx.select().from(sourcingLineNotifications).where(eq(sourcingLineNotifications.id, notificationId)),
+        );
+        expect(row!.tokenHash).toBe(hashInviteToken(token!));
+        expect(row!.expiresAt!.getTime()).toBeGreaterThan(Date.now());
+        return {};
+      },
+    } as unknown as typeof transport;
+    const orderingConsumer = sourcingManualMailer({
+      db,
+      mailers: { ...liveMailers, liveRfq: verifyingTransport },
+      publicWebUrl: 'http://localhost:3000',
+    });
+
+    await expect(handleEvent(db, orderingConsumer, manualEmailEvent(lineId, notificationId))).resolves.toBe('processed');
+  });
+
   it('sends for real even when the notification already shows sentAt (a prior capture-mode auto-send)', async () => {
     const email = `manual-${randomUUID().slice(0, 8)}@example.com`;
     const { lineId, notificationId } = await seedNotification(email, { alreadySent: true });

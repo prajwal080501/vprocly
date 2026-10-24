@@ -35,10 +35,11 @@ describe('SarvamCampaignClient.ensureCampaign', () => {
 
     await expect(client.ensureCampaign()).resolves.toEqual({ campaignId: 'existing-123' });
     expect(fetchMock).toHaveBeenCalledTimes(1); // list only, no create
-    expect(String(fetchMock.mock.calls[0]![0])).toContain('/campaigns');
+    expect(String(fetchMock.mock.calls[0]![0])).toBe('https://apps.sarvam.ai/api/scheduling/v1/orgs/org%20id/workspaces/ws/campaigns');
   });
 
   it('ignores an ended campaign with the same name and creates a fresh one', async () => {
+    const beforeCreate = Date.now();
     let call = 0;
     const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => {
       call++;
@@ -52,7 +53,8 @@ describe('SarvamCampaignClient.ensureCampaign', () => {
 
     await expect(client.ensureCampaign()).resolves.toEqual({ campaignId: 'new-1' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [, createInit] = fetchMock.mock.calls[1]!;
+    const [createUrl, createInit] = fetchMock.mock.calls[1]!;
+    expect(String(createUrl)).toBe('https://apps.sarvam.ai/api/scheduling/v1/orgs/org%20id/workspaces/ws/campaigns');
     const body = JSON.parse(String(createInit?.body));
     expect(body).toMatchObject({
       name: 'vprocly-supplier-outreach',
@@ -60,11 +62,21 @@ describe('SarvamCampaignClient.ensureCampaign', () => {
         app_id: 'app',
         app_version: 1,
         attempts_per_second: 1,
-        connection_configs: [{ connection_id: 'conn', agent_phone_number: '+918000000000' }],
-        retry_config: { max_retries: 2, retry_interval_minutes: 15 },
+        connection_configs: [{ connection_id: 'conn', phone_numbers: ['+918000000000'], weight: 1 }],
+        retry_config: {
+          max_retries: 2,
+          retry_interval_minutes: 15,
+          retry_on: { no_answer: { enabled: true }, busy: { enabled: true } },
+        },
+        webhook_config: { url: 'https://api.example.com/webhook' },
       },
       allowed_schedule: { timezone: 'Asia/Kolkata', allowed_start_time: '10:00', allowed_end_time: '18:00', allowed_days: baseConfig.days },
     });
+    expect(body).not.toHaveProperty('webhook_config');
+    expect(Date.parse(body.start_timestamp)).toBeGreaterThanOrEqual(beforeCreate + 179_000);
+    const durationDays = (Date.parse(body.end_timestamp) - Date.parse(body.start_timestamp)) / (24 * 60 * 60 * 1000);
+    expect(durationDays).toBeGreaterThan(88.9);
+    expect(durationDays).toBeLessThanOrEqual(89);
   });
 
   it('throws with the response body when campaign creation fails', async () => {
@@ -90,8 +102,10 @@ describe('SarvamCampaignClient.addToCohort', () => {
     ]);
 
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toContain('/campaigns/campaign-1/cohorts/stream');
+    expect(String(url)).toBe('https://apps.sarvam.ai/api/scheduling/v1/orgs/org%20id/workspaces/ws/campaigns/campaign-1/cohorts/stream');
     const body = JSON.parse(String(init?.body));
+    expect(body.name).toMatch(/^[\w\- ]{1,50}$/);
+    expect(body.name).toMatch(/^batch-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/);
     expect(body.users).toEqual([{ user_phone_number: '+919876543210', user_identifier: 'tenant:call-1', app_variables: { supplier_name: 'Acme', quantity: '5' } }]);
   });
 

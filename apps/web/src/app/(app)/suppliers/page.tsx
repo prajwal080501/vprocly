@@ -1,4 +1,4 @@
-import { Building2Icon, SearchIcon, ShieldCheckIcon } from 'lucide-react';
+import { SearchIcon, ShieldCheckIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyStateIcon } from '@/components/illustrations';
@@ -19,11 +19,11 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex items-start gap-3"><div className="flex size-10 items-center justify-center rounded-lg border bg-card"><Building2Icon className="size-5" /></div><div><h1 className="text-2xl font-semibold tracking-tight">Suppliers</h1><p className="mt-1 text-sm text-muted-foreground">Manage the approved supplier directory for {me.tenant.name}.</p></div></div>
+        <div><h1 className="page-heading">Suppliers</h1><p className="page-description">Manage the approved supplier directory for {me.tenant.name}.</p></div>
         {canCreate && <CreateSupplierForm />}
       </header>
-      <Card>
-        <CardHeader className="border-b">
+      <Card className="shadow-none">
+        <CardHeader className="border-b bg-muted/20">
           <CardTitle>Supplier directory</CardTitle>
           <CardDescription>{suppliers.length} suppliers in this tenant catalog</CardDescription>
           <CardAction><form className="relative w-72 max-w-full"><SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input name="q" defaultValue={q} placeholder="Search name or code" className="pl-8" /></form></CardAction>
@@ -53,7 +53,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
               <TableRow>
                 <TableCell colSpan={5} className="h-40 px-4 text-center">
                   <div className="flex flex-col items-center gap-2">
-                    <EmptyStateIcon icon={Building2Icon} />
+                    <EmptyStateIcon icon={ShieldCheckIcon} />
                     <p className="text-sm text-muted-foreground">No suppliers yet.</p>
                   </div>
                 </TableCell>

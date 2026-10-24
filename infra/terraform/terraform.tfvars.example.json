@@ -1,4 +1,5 @@
 {
+  "ops_alert_webhook_url": "",
   "reused_secrets": {
     "gemini_api_key": "",
     "google_places_api_key": "",
@@ -18,6 +19,9 @@
     "noreply_smtp_port": 587,
     "noreply_smtp_user": "",
     "noreply_smtp_pass": "",
-    "noreply_smtp_from": ""
+    "noreply_smtp_from": "",
+    "razorpay_key_id": "",
+    "razorpay_key_secret": "",
+    "razorpay_webhook_secret": ""
   }
 }

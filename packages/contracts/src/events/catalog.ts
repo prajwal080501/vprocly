@@ -48,6 +48,7 @@ export const SourcingLineMatchedV1 = z.object({
 
 export const SupplierCallRequestedV1 = z.object({
   voiceCallId: z.uuid(),
+  contactAttemptId: z.uuid().optional(),
   notificationId: z.uuid(),
   sourcingLineId: z.uuid(),
 });
@@ -55,7 +56,19 @@ export const SupplierCallRequestedV1 = z.object({
 export const SupplierEmailRequestedV1 = z.object({
   notificationId: z.uuid(),
   sourcingLineId: z.uuid(),
-  reason: z.enum(['no_phone', 'voice_disabled', 'no_answer', 'busy', 'call_failed']),
+  reason: z.enum(['call_notification', 'no_phone', 'voice_disabled', 'no_answer', 'busy', 'call_failed']),
+});
+
+export const BidDraftConfirmationRequestedV1 = z.object({
+  bidDraftId: z.uuid(),
+  sourcingLineId: z.uuid(),
+});
+
+export const PurchaseOrderOutcomeRecordedV1 = z.object({
+  purchaseOrderId: z.uuid(),
+  sourcingLineId: z.uuid(),
+  platformSupplierId: z.uuid(),
+  outcomeType: z.enum(['acknowledged', 'dispatched', 'delivered', 'quality_accepted', 'quality_rejected', 'cancelled', 'disputed']),
 });
 
 /** An explicit buyer action ("Email" button on a supplier row) -- always sent for real via the live SMTP
@@ -116,11 +129,13 @@ export const EventCatalog = {
   'sourcing.sourcing_line_matched': { 1: SourcingLineMatchedV1 },
   'sourcing.supplier_call_requested': { 1: SupplierCallRequestedV1 },
   'sourcing.supplier_email_requested': { 1: SupplierEmailRequestedV1 },
+  'sourcing.bid_draft_confirmation_requested': { 1: BidDraftConfirmationRequestedV1 },
   'sourcing.supplier_manual_email_requested': { 1: SupplierManualEmailRequestedV1 },
   'sourcing.sourcing_line_unmatched': { 1: SourcingLineUnmatchedV1 },
   'sourcing.sourcing_request_matched': { 1: SourcingRequestMatchedV1 },
   'marketplace.supplier_registered': { 1: SupplierRegisteredV1 },
   'sourcing.bid_accepted': { 1: SourcingBidAcceptedV1 },
+  'sourcing.purchase_order_outcome_recorded': { 1: PurchaseOrderOutcomeRecordedV1 },
 } as const;
 
 export type EventType = keyof typeof EventCatalog;

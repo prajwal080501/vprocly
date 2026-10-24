@@ -6,6 +6,7 @@ import { Building2Icon, CheckCircle2Icon, CoinsIcon, LogOutIcon, MailIcon, MapPi
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { IconTile, type IconTileTone } from '@/components/icon-tile';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
@@ -25,6 +26,13 @@ const detailIcons = {
   organization: Building2Icon,
 };
 
+const detailTones: Record<ProfileDetail['icon'], IconTileTone> = {
+  email: 'primary',
+  location: 'green',
+  balance: 'amber',
+  organization: 'violet',
+};
+
 type ProfilePopoverProps = {
   name: string;
   subtitle: string;
@@ -32,8 +40,6 @@ type ProfilePopoverProps = {
   initials: string;
   details: ProfileDetail[];
   callbackUrl: string;
-  /** Own mobile number, editable right here -- undefined omits the field entirely (not every caller has to
-   *  support it yet). */
   phone?: string | null;
   onUpdatePhone?: (previous: UpdatePhoneState, formData: FormData) => Promise<UpdatePhoneState>;
 };
@@ -42,7 +48,7 @@ function EditablePhone({ phone, onUpdatePhone }: { phone: string | null; onUpdat
   const [state, formAction, pending] = useActionState(onUpdatePhone, {});
   return (
     <form action={formAction} className="grid grid-cols-[1.75rem_1fr_auto] items-center gap-2 text-left">
-      <PhoneIcon className="size-4 text-muted-foreground" />
+      <IconTile icon={PhoneIcon} tone="cyan" className="size-7" />
       <div className="min-w-0">
         <label htmlFor="profile-phone" className="text-xs text-muted-foreground">Mobile number</label>
         <Input id="profile-phone" name="phone" type="tel" defaultValue={phone ?? ''} placeholder="Not set" className="h-7 px-1.5 text-sm" />
@@ -94,7 +100,7 @@ export function ProfilePopover({ name, subtitle, accountLabel, initials, details
             const Icon = detailIcons[detail.icon];
             return (
               <div key={detail.label} className="grid grid-cols-[1.75rem_1fr] items-center gap-2 text-left">
-                <Icon className="size-4 text-muted-foreground" />
+                <IconTile icon={Icon} tone={detailTones[detail.icon]} className="size-7" />
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">{detail.label}</p>
                   <p className="truncate text-sm font-medium">{detail.value}</p>

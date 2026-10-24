@@ -2,6 +2,7 @@ export type SupplierCallRequest = {
   phone: string;
   tenantId: string;
   voiceCallId: string;
+  buyerCompanyName: string;
   supplierName: string;
   itemDescription: string;
   quantity: string;
@@ -24,7 +25,8 @@ export function supplierCallItemDescription(
   const quantityLabel = [quantity, uom].filter(Boolean).join(' ');
   const deliveryLabel = [deliveryCity, deliveryState].filter(Boolean).join(', ');
   const context = [quantityLabel && `Quantity: ${quantityLabel}`, deliveryLabel && `Delivery: ${deliveryLabel}`].filter(Boolean);
-  return context.length > 0 ? `${itemDescription}\n${context.join('\n')}` : itemDescription;
+  const instruction = 'Notify the supplier about this request and ask them to check their email for the secure bidding link. Do not collect bid details during the call.';
+  return [itemDescription, ...context, instruction].join('\n');
 }
 
 /** Sarvam requires E.164 (`+<countrycode><number>`), but phone numbers reach this platform from several
@@ -54,8 +56,7 @@ type SarvamConfig = {
   webhookUrl: string;
 };
 
-/** Sarvam Instant Outbound API client. API keys stay server-side; supplier/item context is supplied as
- * agent variables so the configured voice agent can explain the sourcing opportunity and invite a bid. */
+/** Sarvam Instant Outbound API client. Calls only notify suppliers; the emailed invite is the sole bid path. */
 export class SarvamVoiceCallClient implements VoiceCallClient {
   constructor(private readonly config: SarvamConfig) {}
 
@@ -73,6 +74,7 @@ export class SarvamVoiceCallClient implements VoiceCallClient {
             agent_phone_number: this.config.agentPhoneNumber,
           },
           agent_variables: {
+            buyer_company_name: request.buyerCompanyName,
             supplier_name: request.supplierName,
             item_description: supplierCallItemDescription(
               request.itemDescription,

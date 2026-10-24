@@ -8,6 +8,7 @@ import { runConsumer } from './consumer.js';
 import { buildConsumers } from './consumers/index.js';
 import { createMailers } from './mailer.js';
 import { ObjectStorage } from './object-storage.js';
+import { alertWorker, configureWorkerObservability } from './observability.js';
 import { relayOnce } from './relay.js';
 import { GeminiPlacesResearchClient } from './research/gemini-places-client.js';
 import { ensureStreams } from './streams.js';
@@ -17,6 +18,7 @@ import { SarvamCampaignClient } from './voice/sarvam-campaign-client.js';
 import { SarvamVoiceCallClient } from './voice/sarvam-client.js';
 
 const config = loadConfig();
+configureWorkerObservability({ alertWebhookUrl: config.OPS_ALERT_WEBHOOK_URL, releaseVersion: config.RELEASE_VERSION });
 console.log(JSON.stringify({ msg: 'email delivery configured', mode: config.EMAIL_DELIVERY_MODE }));
 console.log(JSON.stringify({ msg: 'voice delivery configured', mode: config.VOICE_DELIVERY_MODE }));
 const pool = createPool(config.DATABASE_URL, 5);
@@ -37,7 +39,15 @@ const temporalRun = temporalWorker.run();
 
 const research =
   config.GEMINI_API_KEY && config.GOOGLE_PLACES_API_KEY
-    ? new GeminiPlacesResearchClient({ geminiApiKey: config.GEMINI_API_KEY, geminiModel: config.GEMINI_MODEL, placesApiKey: config.GOOGLE_PLACES_API_KEY })
+    ? new GeminiPlacesResearchClient({
+        geminiApiKey: config.GEMINI_API_KEY,
+        geminiModel: config.GEMINI_MODEL,
+        placesApiKey: config.GOOGLE_PLACES_API_KEY,
+        geminiInputCostMicrosPerMillion: config.GEMINI_INPUT_COST_MICROS_PER_MILLION,
+        geminiOutputCostMicrosPerMillion: config.GEMINI_OUTPUT_COST_MICROS_PER_MILLION,
+        geminiSearchCostMicros: config.GEMINI_SEARCH_COST_MICROS,
+        placeDetailsCostMicros: config.GOOGLE_PLACE_DETAILS_COST_MICROS,
+      })
     : undefined;
 if (!research) console.log(JSON.stringify({ msg: 'AI supplier discovery disabled: GEMINI_API_KEY/GOOGLE_PLACES_API_KEY not set' }));
 
@@ -89,7 +99,9 @@ if (campaign) {
     campaignId = (await campaign.ensureCampaign()).campaignId;
     console.log(JSON.stringify({ msg: 'Sarvam campaign ready', campaignId }));
   } catch (err) {
-    console.error(JSON.stringify({ msg: 'Sarvam campaign setup failed; automatic calling disabled this run', error: String(err) }));
+    const fields = { msg: 'Sarvam campaign setup failed; automatic calling disabled this run', error: String(err) };
+    console.error(JSON.stringify(fields));
+    void alertWorker('sarvam-campaign-setup', fields.msg, fields);
   }
 }
 
@@ -119,7 +131,9 @@ const relayLoop = (async () => {
       if (published || failed) console.log(JSON.stringify({ msg: 'outbox relay', published, failed }));
       if (published + failed < config.RELAY_BATCH_SIZE) await sleep(config.RELAY_IDLE_MS);
     } catch (err) {
-      console.error(JSON.stringify({ msg: 'outbox relay error', error: String(err) }));
+      const fields = { msg: 'outbox relay error', error: String(err) };
+      console.error(JSON.stringify(fields));
+      void alertWorker('outbox-relay', fields.msg, fields);
       await sleep(config.RELAY_IDLE_MS * 4);
     }
   }

@@ -1,11 +1,11 @@
 import { createInviteToken, INVITE_TOKEN_TTL_DAYS } from '@vprocly/contracts';
-import { categories, sourcingLineNotifications, sourcingLines, withTenant, type Database } from '@vprocly/db';
+import { categories, sourcingLineNotifications, sourcingLines, supplierContactAttempts, withTenant, type Database } from '@vprocly/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { ConsumerDefinition } from '../consumer.js';
 import type { Mailers } from '../mailer.js';
 import { buildInviteEmailContent } from './invite-email-content.js';
 
-type PendingInvite = { id: string; email: string; tokenHash: string; token: string; expiresAt: Date };
+type PendingInvite = { id: string; email: string; platformSupplierId: string | null; tokenHash: string; token: string; expiresAt: Date };
 
 /**
  * Sends one explicitly requested fallback invite email, generating its invite token
@@ -41,7 +41,7 @@ export function sourcingInviteMailer(
           .innerJoin(categories, eq(categories.id, sourcingLines.categoryId))
           .where(eq(sourcingLines.id, sourcingLineId));
         const pendingRows = await tx
-          .select({ id: sourcingLineNotifications.id, email: sourcingLineNotifications.email })
+          .select({ id: sourcingLineNotifications.id, email: sourcingLineNotifications.email, platformSupplierId: sourcingLineNotifications.platformSupplierId })
           .from(sourcingLineNotifications)
           .where(and(eq(sourcingLineNotifications.id, notificationId), eq(sourcingLineNotifications.sourcingLineId, sourcingLineId), isNull(sourcingLineNotifications.sentAt)));
         return { line: row, pendingRows };
@@ -54,12 +54,35 @@ export function sourcingInviteMailer(
       for (const invite of pending) {
         const link = `${deps.publicWebUrl}/supplier/invite/${invite.token}`;
         const content = buildInviteEmailContent(line, link);
+
+        // Activate the token before handing the message to SMTP. Previously this update happened only
+        // after sendMail() returned, so a supplier who clicked immediately (or a worker that stopped after
+        // SMTP accepted the message) received an email whose link did not exist in the database.
+        await withTenant(deps.db, { tenantId: event.tenantId, correlationId: event.correlationId ?? undefined }, async (tx) => {
+          await tx
+            .update(sourcingLineNotifications)
+            .set({ tokenHash: invite.tokenHash, expiresAt: invite.expiresAt })
+            .where(and(eq(sourcingLineNotifications.id, invite.id), isNull(sourcingLineNotifications.sentAt)));
+        });
+
         await deps.mailers.rfq.sendMail({ from: deps.mailers.rfqFrom, to: invite.email, ...content });
         await withTenant(deps.db, { tenantId: event.tenantId, correlationId: event.correlationId ?? undefined }, async (tx) => {
           await tx
             .update(sourcingLineNotifications)
-            .set({ tokenHash: invite.tokenHash, expiresAt: invite.expiresAt, sentAt: new Date() })
+            .set({ sentAt: new Date() })
             .where(and(eq(sourcingLineNotifications.id, invite.id), isNull(sourcingLineNotifications.sentAt)));
+          await tx.insert(supplierContactAttempts).values({
+            tenantId: event.tenantId,
+            notificationId: invite.id,
+            sourcingLineId,
+            platformSupplierId: invite.platformSupplierId,
+            channel: 'email',
+            purpose: 'rfq',
+            status: 'sent',
+            provider: 'smtp',
+            completedAt: new Date(),
+            metadata: { reason: event.payload.reason },
+          });
         });
       }
     },

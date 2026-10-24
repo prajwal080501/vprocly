@@ -16,6 +16,10 @@ export class WalletService {
     return this.applyDelta(tx, platformSupplierId, -points, 'debit', refType, refId);
   }
 
+  async credit(tx: Tx, platformSupplierId: string, points: number, refType: string, refId: string): Promise<number> {
+    return this.applyDelta(tx, platformSupplierId, points, 'credit', refType, refId);
+  }
+
   private async applyDelta(
     tx: Tx,
     platformSupplierId: string,

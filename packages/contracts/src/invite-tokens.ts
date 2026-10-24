@@ -15,3 +15,4 @@ export function hashInviteToken(token: string): string {
 }
 
 export const INVITE_TOKEN_TTL_DAYS = 14;
+export const BID_CONFIRMATION_TOKEN_TTL_DAYS = 7;

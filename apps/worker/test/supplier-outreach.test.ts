@@ -83,7 +83,7 @@ describe('supplier voice outreach', () => {
     expect(events.filter((row) => row.eventType === 'sourcing.supplier_email_requested')).toHaveLength(0);
   });
 
-  it('streams a supplier into the campaign cohort before email when a phone is available', async () => {
+  it('queues a notification call and the bidding email when a phone is available', async () => {
     const seeded = await seed('+919876543210');
     const campaign = fakeCampaign();
     const matched = event('sourcing.sourcing_line_matched', seeded.lineId, { sourcingLineId: seeded.lineId, matchedSupplierCount: 0, invitedNewCount: 1 });
@@ -93,10 +93,12 @@ describe('supplier voice outreach', () => {
     expect(campaign.added[0]).toMatchObject({
       userPhoneNumber: '+919876543210',
       appVariables: {
+        buyer_company_name: expect.any(String),
         supplier_name: 'Voice Supplier',
-        item_description: 'Precision bearing\nQuantity: 10.000 NOS\nDelivery: Pune, Maharashtra',
       },
     });
+    expect(campaign.added[0]!.appVariables.buyer_company_name).not.toBe('');
+    expect(campaign.added[0]!.appVariables.item_description).toContain('check their email for the secure bidding link');
     expect(campaign.added[0]!.userIdentifier).toMatch(new RegExp(`^${ACME}:[0-9a-f-]{36}$`));
 
     const [call] = await withTenant(db, { tenantId: ACME }, (tx) => tx.select().from(supplierVoiceCalls).where(eq(supplierVoiceCalls.notificationId, seeded.notificationId)));
@@ -106,6 +108,10 @@ describe('supplier voice outreach', () => {
       tx.select().from(outbox).where(and(eq(outbox.eventType, 'sourcing.supplier_call_requested'), eq(outbox.aggregateId, call!.id))),
     );
     expect(callEvents).toHaveLength(0);
+    const [emailEvent] = await withTenant(db, { tenantId: ACME }, (tx) =>
+      tx.select().from(outbox).where(and(eq(outbox.eventType, 'sourcing.supplier_email_requested'), eq(outbox.aggregateId, seeded.notificationId))),
+    );
+    expect(emailEvent?.payload).toMatchObject({ reason: 'call_notification' });
   });
 
   it('falls back to email without touching the campaign when Sarvam is unconfigured, even in live mode', async () => {
@@ -140,8 +146,10 @@ describe('supplier voice outreach', () => {
       phone: '+919876543212',
     }).returning());
     const callRequested = event('sourcing.supplier_call_requested', call!.id, { voiceCallId: call!.id, notificationId: seeded.notificationId, sourcingLineId: seeded.lineId });
-    const voice: VoiceCallClient = { async createCall() { return { attemptId: `attempt-${randomUUID()}` }; } };
+    let buyerCompanyName = '';
+    const voice: VoiceCallClient = { async createCall(request) { buyerCompanyName = request.buyerCompanyName; return { attemptId: `attempt-${randomUUID()}` }; } };
     await handleEvent(db, supplierVoiceCaller({ db, voice }), callRequested);
+    expect(buyerCompanyName).not.toBe('');
     const [started] = await withTenant(db, { tenantId: ACME }, (tx) => tx.select().from(supplierVoiceCalls).where(eq(supplierVoiceCalls.id, call!.id)));
     expect(started).toMatchObject({ status: 'dialing' });
     expect(started!.attemptId).toMatch(/^attempt-/);

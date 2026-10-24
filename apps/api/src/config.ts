@@ -27,6 +27,12 @@ const Env = z.object({
   KEYCLOAK_ADMIN_CLIENT_ID: z.string().default('vprocly-admin-api'),
   KEYCLOAK_ADMIN_CLIENT_SECRET: z.string(),
   KEYCLOAK_TARGET_REALM: z.string().default('vprocly'),
+  /** Noreply SMTP identity used for supplier signup verification codes. Defaults target local Mailpit. */
+  NOREPLY_SMTP_HOST: z.string().default('localhost'),
+  NOREPLY_SMTP_PORT: z.coerce.number().int().positive().default(51025),
+  NOREPLY_SMTP_USER: z.string().optional(),
+  NOREPLY_SMTP_PASS: z.string().optional(),
+  NOREPLY_SMTP_FROM: z.string().default('vProcly <noreply@vprocly.example>'),
   /**
    * Domain-agnostic category matching (CategoryResolverService): embeds free-text category names so a
    * near-duplicate ("Steel Products" vs "Steel & Metal Products") reuses an existing category instead of
@@ -36,9 +42,20 @@ const Env = z.object({
    */
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_EMBEDDING_MODEL: z.string().default('text-embedding-004'),
+  /** Server-restricted Google Maps key used for supplier checkout reverse geocoding. */
+  GOOGLE_MAPS_API_KEY: z.preprocess((value) => value === '' ? undefined : value, z.string().min(1).optional()),
   /** Shared with the worker and embedded in Sarvam's callback URL because Instant Outbound webhooks do
    * not expose a custom signature/header setting. Leave unset when voice delivery is not live. */
   SARVAM_WEBHOOK_SECRET: z.string().min(24).optional(),
+  /** Razorpay keys are optional so local development can run without payments. Refill endpoints return
+   * a clear unavailable response until all three are configured. */
+  RAZORPAY_KEY_ID: z.preprocess((value) => value === '' ? undefined : value, z.string().min(1).optional()),
+  RAZORPAY_KEY_SECRET: z.preprocess((value) => value === '' ? undefined : value, z.string().min(1).optional()),
+  RAZORPAY_WEBHOOK_SECRET: z.preprocess((value) => value === '' ? undefined : value, z.string().min(16).optional()),
+  /** Immutable release identifier injected by deployment. */
+  RELEASE_VERSION: z.string().default('development'),
+  /** Optional generic incident destination (Slack workflow, Teams workflow, PagerDuty proxy, etc.). */
+  OPS_ALERT_WEBHOOK_URL: z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional()),
 });
 export type AppConfig = z.infer<typeof Env>;
 

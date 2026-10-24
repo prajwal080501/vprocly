@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import {
+  bidDrafts,
   categories,
   createDatabase,
   createPool,
@@ -10,6 +11,7 @@ import {
   sourcingLines,
   sourcingRequests,
   supplierVoiceCalls,
+  supplierContactAttempts,
   withTenant,
 } from '@vprocly/db';
 import { and, eq } from 'drizzle-orm';
@@ -71,7 +73,7 @@ async function seedVoiceCall() {
       status: 'dialing',
       startedAt: new Date(),
     }).returning();
-    return { callId: call!.id, notificationId: notification!.id };
+    return { callId: call!.id, notificationId: notification!.id, lineId: line!.id, supplierId: supplier!.id };
   });
 }
 
@@ -100,11 +102,13 @@ function webhookBody(callId: string, status: 'connected' | 'no_answer') {
 }
 
 describe('Sarvam voice outcome webhook', () => {
-  it('suppresses email after a connected call', async () => {
+  it('stores connected call details, requests the bidding email, and never creates a bid draft', async () => {
     const seeded = await seedVoiceCall();
     await http.post(`/api/webhooks/sarvam/instant-outbound/${process.env.SARVAM_WEBHOOK_SECRET}`).send(webhookBody(seeded.callId, 'connected')).expect(200);
     const state = await withTenant(db, { tenantId: ACME }, async (tx) => ({
       call: (await tx.select().from(supplierVoiceCalls).where(eq(supplierVoiceCalls.id, seeded.callId)))[0],
+      attempts: await tx.select().from(supplierContactAttempts).where(eq(supplierContactAttempts.voiceCallId, seeded.callId)),
+      drafts: await tx.select().from(bidDrafts).where(eq(bidDrafts.voiceCallId, seeded.callId)),
       emailEvents: await tx.select().from(outbox).where(and(eq(outbox.eventType, 'sourcing.supplier_email_requested'), eq(outbox.aggregateId, seeded.notificationId))),
     }));
     expect(state.call).toMatchObject({
@@ -123,7 +127,10 @@ describe('Sarvam voice outcome webhook', () => {
         { role: 'user', enText: 'Yes, in twelve days.' },
       ],
     });
-    expect(state.emailEvents).toHaveLength(0);
+    expect(state.emailEvents).toHaveLength(1);
+    expect(state.emailEvents[0]!.payload).toMatchObject({ reason: 'call_notification' });
+    expect(state.attempts).toEqual([expect.objectContaining({ channel: 'voice', status: 'connected' })]);
+    expect(state.drafts).toEqual([]);
   });
 
   it('enriches a completed call when Sarvam redelivers output variables', async () => {

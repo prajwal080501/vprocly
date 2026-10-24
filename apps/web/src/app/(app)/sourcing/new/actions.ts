@@ -20,6 +20,7 @@ const Line = z.object({
 
 const Form = z.object({
   title: z.string().trim().min(1, 'Title is required'),
+  sourcingRequestId: z.string().uuid().optional(),
   lines: z.array(Line).min(1),
 });
 
@@ -37,6 +38,7 @@ export async function createManualSourcingRequest(input: unknown): Promise<Creat
       method: 'POST',
       body: JSON.stringify({
         title: parsed.data.title,
+        sourcingRequestId: parsed.data.sourcingRequestId,
         lines: parsed.data.lines.map((l) => ({
           ...l,
           itemCode: l.itemCode || undefined,

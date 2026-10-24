@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import type { ImportResult } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-export function BomUploadForm({ useFileNameAsTitle = false }: { useFileNameAsTitle?: boolean }) {
+export function BomUploadForm({ useFileNameAsTitle = true }: { useFileNameAsTitle?: boolean }) {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);

@@ -13,6 +13,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ProcurementVoiceDemo } from './procurement-voice-demo';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -40,6 +41,7 @@ function Header() {
           <a href="#workflow" className="transition-colors hover:text-foreground">Workflow</a>
           <a href="#voice" className="transition-colors hover:text-foreground">Voice sourcing</a>
           <a href="#suppliers" className="transition-colors hover:text-foreground">For suppliers</a>
+          <Link href="/contact" className="transition-colors hover:text-foreground">Contact</Link>
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -240,7 +242,6 @@ function WorkflowSection() {
 }
 
 function VoiceSection() {
-  const facts = [['Disposition', 'Commercials confirmed'], ['Lead time', '5 days'], ['Minimum order', '500 units'], ['Rate at MOQ', 'INR 120 per unit']];
   return (
     <section id="voice" className="landing-inverse py-24 md:py-32">
       <div className="mx-auto grid max-w-7xl gap-14 px-5 md:grid-cols-[0.85fr_1.15fr] md:items-center md:px-8">
@@ -254,16 +255,7 @@ function VoiceSection() {
             <span className="flex items-center gap-2"><MailCheckIcon className="size-4 text-primary" />Automatic email fallback when needed</span>
           </div>
         </Reveal>
-        <Reveal delay={0.1} className="overflow-hidden rounded-lg border border-foreground/15 bg-foreground/[0.05] shadow-2xl">
-          <div className="flex items-center justify-between border-b border-foreground/10 px-5 py-4">
-            <div><p className="text-sm font-medium">Apex Motion Systems</p><p className="text-xs text-foreground/45">Completed just now</p></div>
-            <Badge className="bg-foreground/10 text-foreground">Call answered</Badge>
-          </div>
-          <div className="grid gap-px bg-foreground/10 sm:grid-cols-2">
-            {facts.map(([label, value]) => <div key={label} className="bg-background/90 p-5"><p className="text-xs text-foreground/40">{label}</p><p className="mt-2 text-sm font-medium">{value}</p></div>)}
-          </div>
-          <div className="p-5"><p className="text-xs text-foreground/40">Call summary</p><p className="mt-2 text-sm leading-relaxed text-foreground/75">The supplier confirmed MOQ, rate, and delivery lead time for the requested item.</p></div>
-        </Reveal>
+        <Reveal delay={0.1}><ProcurementVoiceDemo /></Reveal>
       </div>
     </section>
   );
@@ -309,8 +301,15 @@ export function LandingPage() {
     <main className="overflow-x-clip bg-background">
       <Hero /><OutcomeStrip /><WorkflowSection /><VoiceSection /><AudienceSection /><FinalCta />
       <footer className="border-t bg-background px-5 py-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <BrandLogo markClassName="size-6 rounded-md" /><span>Supplier research, outreach, bidding, and award in one traceable workflow.</span>
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div><BrandLogo markClassName="size-6 rounded-md" /><p className="mt-2">Pune, Maharashtra, India</p></div>
+          <nav className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Footer navigation">
+            <Link href="/status" className="hover:text-foreground hover:underline">Status</Link>
+            <Link href="/privacy" className="hover:text-foreground hover:underline">Privacy</Link>
+            <Link href="/terms" className="hover:text-foreground hover:underline">Terms</Link>
+            <Link href="/contact" className="hover:text-foreground hover:underline">Contact</Link>
+            <a href="mailto:support@vprocly.com" className="hover:text-foreground hover:underline">support@vprocly.com</a>
+          </nav>
         </div>
       </footer>
     </main>

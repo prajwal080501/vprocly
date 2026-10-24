@@ -33,6 +33,28 @@ export type SupplierBidActivity = {
   buyer_contact_email: string | null;
 };
 
+export type VoiceBidConfirmation = {
+  draft_id: string;
+  status: string;
+  supplier_name: string;
+  item_code: string | null;
+  description: string;
+  qty: string;
+  uom: string;
+  delivery_city: string;
+  delivery_state: string;
+  need_by: string | null;
+  unit_price: string | null;
+  minimum_order_qty: string | null;
+  lead_time_days: number | null;
+  currency: string;
+  tax_percent: string | null;
+  freight_amount: string | null;
+  quote_validity_date: string | null;
+  notes: string | null;
+  expires_at: string | null;
+};
+
 /** Everything a supplier is matched to and can still bid on. See migration 0012 for exactly which columns
  *  this can return -- never the buyer/tenant. */
 export async function listOpenLinesForSupplier(tx: Tx, platformSupplierId: string): Promise<OpenLineForSupplier[]> {
@@ -59,4 +81,34 @@ export async function submitSupplierBid(
   );
   const row = res.rows[0]!;
   return { id: row.id, isNew: row.is_new };
+}
+
+export async function resolveVoiceBidConfirmation(tx: Tx, tokenHash: string): Promise<VoiceBidConfirmation | null> {
+  const result = await tx.execute<VoiceBidConfirmation>(sql`SELECT * FROM resolve_bid_confirmation(${tokenHash})`);
+  return result.rows[0] ?? null;
+}
+
+export async function confirmVoiceBid(
+  tx: Tx,
+  params: {
+    tokenHash: string;
+    unitPrice: string;
+    minimumOrderQty: string | null;
+    leadTimeDays: number;
+    currency: string;
+    taxPercent: string | null;
+    freightAmount: string | null;
+    quoteValidityDate: string | null;
+    notes: string | null;
+  },
+): Promise<{ bidId: string; draftId: string; isNew: boolean }> {
+  const result = await tx.execute<{ bid_id: string; draft_id: string; is_new: boolean }>(sql`
+    SELECT * FROM confirm_voice_bid(
+      ${params.tokenHash}, ${params.unitPrice}::numeric, ${params.minimumOrderQty}::numeric,
+      ${params.leadTimeDays}::integer, ${params.currency}, ${params.taxPercent}::numeric,
+      ${params.freightAmount}::numeric, ${params.quoteValidityDate}::date, ${params.notes}
+    )
+  `);
+  const row = result.rows[0]!;
+  return { bidId: row.bid_id, draftId: row.draft_id, isNew: row.is_new };
 }

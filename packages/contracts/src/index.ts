@@ -2,3 +2,5 @@ export * from './roles.js';
 export * from './events/envelope.js';
 export * from './events/catalog.js';
 export * from './invite-tokens.js';
+export * from './supplier-research.js';
+export * from './supplier-intelligence.js';

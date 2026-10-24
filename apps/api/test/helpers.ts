@@ -18,7 +18,7 @@ process.env.SARVAM_WEBHOOK_SECRET ??= 'test-sarvam-webhook-secret-123456';
 
 export async function createTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = configureApp(moduleRef.createNestApplication());
+  const app = configureApp(moduleRef.createNestApplication({ rawBody: true }));
   await app.init();
   return app;
 }

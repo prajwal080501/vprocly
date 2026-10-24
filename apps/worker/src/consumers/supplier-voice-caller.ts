@@ -4,7 +4,9 @@ import {
   platformSuppliers,
   sourcingLineNotifications,
   sourcingLines,
+  supplierContactAttempts,
   supplierVoiceCalls,
+  tenants,
   withTenant,
   type Database,
 } from '@vprocly/db';
@@ -28,6 +30,7 @@ export function supplierVoiceCaller(deps: { db: Database; voice: VoiceCallClient
         const [result] = await tx
           .select({
             call: supplierVoiceCalls,
+            buyerCompanyName: tenants.name,
             supplierName: platformSuppliers.name,
             description: sourcingLines.description,
             qty: sourcingLines.qty,
@@ -39,6 +42,7 @@ export function supplierVoiceCaller(deps: { db: Database; voice: VoiceCallClient
           .innerJoin(sourcingLineNotifications, eq(sourcingLineNotifications.id, supplierVoiceCalls.notificationId))
           .innerJoin(platformSuppliers, eq(platformSuppliers.id, sourcingLineNotifications.platformSupplierId))
           .innerJoin(sourcingLines, eq(sourcingLines.id, supplierVoiceCalls.sourcingLineId))
+          .innerJoin(tenants, eq(tenants.id, sourcingLines.tenantId))
           .where(eq(supplierVoiceCalls.id, voiceCallId));
         if (result?.call.status === 'queued') {
           await tx.update(supplierVoiceCalls).set({ status: 'dialing', startedAt: new Date(), updatedAt: new Date() }).where(eq(supplierVoiceCalls.id, voiceCallId));
@@ -52,6 +56,7 @@ export function supplierVoiceCaller(deps: { db: Database; voice: VoiceCallClient
           phone: row.call.phone,
           tenantId: event.tenantId,
           voiceCallId,
+          buyerCompanyName: row.buyerCompanyName,
           supplierName: row.supplierName,
           itemDescription: row.description,
           quantity: row.qty,
@@ -67,8 +72,12 @@ export function supplierVoiceCaller(deps: { db: Database; voice: VoiceCallClient
     async handler(tx, event, prepared) {
       if (prepared.result === 'noop') return;
       const voiceCallId = String(event.payload.voiceCallId);
+      const contactAttemptId = typeof event.payload.contactAttemptId === 'string' ? event.payload.contactAttemptId : null;
       if (prepared.result === 'started') {
         await tx.update(supplierVoiceCalls).set({ attemptId: prepared.attemptId, updatedAt: new Date() }).where(eq(supplierVoiceCalls.id, voiceCallId));
+        if (contactAttemptId) {
+          await tx.update(supplierContactAttempts).set({ status: 'dialing', providerAttemptId: prepared.attemptId, startedAt: new Date(), updatedAt: new Date() }).where(eq(supplierContactAttempts.id, contactAttemptId));
+        }
         return;
       }
 
@@ -76,6 +85,9 @@ export function supplierVoiceCaller(deps: { db: Database; voice: VoiceCallClient
         .update(supplierVoiceCalls)
         .set({ status: 'failed', failureReason: prepared.reason.slice(0, 2000), completedAt: new Date(), updatedAt: new Date() })
         .where(eq(supplierVoiceCalls.id, voiceCallId));
+      if (contactAttemptId) {
+        await tx.update(supplierContactAttempts).set({ status: 'failed', metadata: { reason: prepared.reason.slice(0, 2000) }, completedAt: new Date(), updatedAt: new Date() }).where(eq(supplierContactAttempts.id, contactAttemptId));
+      }
       const payload = parseEventPayload('sourcing.supplier_email_requested', 1, {
         notificationId: String(event.payload.notificationId),
         sourcingLineId: String(event.payload.sourcingLineId),

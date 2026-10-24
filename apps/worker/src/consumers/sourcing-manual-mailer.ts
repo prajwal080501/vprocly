@@ -1,11 +1,11 @@
 import { createInviteToken, INVITE_TOKEN_TTL_DAYS } from '@vprocly/contracts';
-import { categories, sourcingLineNotifications, sourcingLines, withTenant, type Database } from '@vprocly/db';
+import { categories, sourcingLineNotifications, sourcingLines, supplierContactAttempts, withTenant, type Database } from '@vprocly/db';
 import { eq } from 'drizzle-orm';
 import type { ConsumerDefinition } from '../consumer.js';
 import type { Mailers } from '../mailer.js';
 import { buildInviteEmailContent } from './invite-email-content.js';
 
-type Prepared = { email: string; tokenHash: string; token: string; expiresAt: Date } | undefined;
+type Prepared = { email: string; platformSupplierId: string | null } | undefined;
 
 /**
  * The "Email now" button on a supplier row (sourcing.service.ts's manualEmail) -- always sends for real via
@@ -38,7 +38,7 @@ export function sourcingManualMailer(deps: { db: Database; mailers: Mailers; pub
           .from(sourcingLines)
           .innerJoin(categories, eq(categories.id, sourcingLines.categoryId))
           .where(eq(sourcingLines.id, sourcingLineId));
-        const [notification] = await tx.select({ email: sourcingLineNotifications.email }).from(sourcingLineNotifications).where(eq(sourcingLineNotifications.id, notificationId));
+        const [notification] = await tx.select({ email: sourcingLineNotifications.email, platformSupplierId: sourcingLineNotifications.platformSupplierId }).from(sourcingLineNotifications).where(eq(sourcingLineNotifications.id, notificationId));
         return { line: row, notification };
       });
       if (!line || !notification) return undefined; // line or notification was deleted; nothing to send
@@ -46,16 +46,39 @@ export function sourcingManualMailer(deps: { db: Database; mailers: Mailers; pub
       const invite = { ...createInviteToken(), expiresAt: new Date(Date.now() + INVITE_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000) };
       const link = `${deps.publicWebUrl}/supplier/invite/${invite.token}`;
       const content = buildInviteEmailContent(line, link);
+
+      // Make the link resolvable before SMTP can deliver it. Keeping this write after sendMail() created a
+      // race for fast clicks and left permanently invalid emails if the worker stopped between delivery and
+      // the handler transaction.
+      await withTenant(deps.db, { tenantId: event.tenantId, correlationId: event.correlationId ?? undefined }, async (tx) => {
+        await tx
+          .update(sourcingLineNotifications)
+          .set({ tokenHash: invite.tokenHash, expiresAt: invite.expiresAt })
+          .where(eq(sourcingLineNotifications.id, notificationId));
+      });
+
       await deps.mailers.liveRfq.sendMail({ from: deps.mailers.liveRfqFrom, to: notification.email, ...content });
-      return { email: notification.email, tokenHash: invite.tokenHash, token: invite.token, expiresAt: invite.expiresAt };
+      return { email: notification.email, platformSupplierId: notification.platformSupplierId };
     },
     async handler(tx, event, prepared) {
       if (!prepared) return;
       const notificationId = String(event.payload.notificationId);
       await tx
         .update(sourcingLineNotifications)
-        .set({ tokenHash: prepared.tokenHash, expiresAt: prepared.expiresAt, sentAt: new Date() })
+        .set({ sentAt: new Date() })
         .where(eq(sourcingLineNotifications.id, notificationId));
+      await tx.insert(supplierContactAttempts).values({
+        tenantId: event.tenantId,
+        notificationId,
+        sourcingLineId: String(event.payload.sourcingLineId),
+        platformSupplierId: prepared.platformSupplierId,
+        channel: 'email',
+        purpose: 'rfq',
+        status: 'sent',
+        provider: 'smtp',
+        completedAt: new Date(),
+        metadata: { manual: true },
+      });
     },
   };
 }

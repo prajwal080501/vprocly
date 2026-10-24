@@ -62,6 +62,25 @@ describe('authentication', () => {
   });
 });
 
+describe('operations visibility', () => {
+  it('is restricted to tenant administrators and returns operational state', async () => {
+    await http.get('/api/operations/summary').set(as('alice')).expect(403);
+    const response = await http.get('/api/operations/summary').set(as('bob')).expect(200);
+    expect(response.body).toMatchObject({
+      releaseVersion: expect.any(String),
+      api: {
+        requestCount: expect.any(Number),
+        errorRate: expect.any(Number),
+        p95LatencyMs: expect.any(Number),
+      },
+      queue: { pending_count: expect.any(Number) },
+      failedResearchJobs: expect.any(Array),
+      delayedTasks: expect.any(Array),
+      paymentMismatches: expect.any(Array),
+    });
+  });
+});
+
 describe('suppliers: authorization, isolation, audit and events', () => {
   const code = `SUP-${randomUUID().slice(0, 8)}`;
   const correlationId = randomUUID();

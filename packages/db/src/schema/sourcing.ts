@@ -1,4 +1,4 @@
-import { date, index, integer, jsonb, numeric, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { boolean, date, index, integer, jsonb, numeric, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { categories, platformSuppliers } from './marketplace.js';
 import { suppliers } from './master-data.js';
 import { id, provenance, tenantId, timestamps } from './columns.js';
@@ -68,17 +68,62 @@ export const sourcingLineNotifications = pgTable(
     sourcingLineId: uuid('sourcing_line_id').notNull().references(() => sourcingLines.id),
     email: text('email').notNull(),
     platformSupplierId: uuid('platform_supplier_id').references(() => platformSuppliers.id),
+    itemFingerprint: text('item_fingerprint'),
     tokenHash: text('token_hash'),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [unique().on(t.sourcingLineId, t.email), index('sourcing_line_notifications_line_idx').on(t.sourcingLineId)],
+  (t) => [
+    unique().on(t.sourcingLineId, t.email),
+    index('sourcing_line_notifications_line_idx').on(t.sourcingLineId),
+    index('sourcing_line_notifications_item_idx').on(t.itemFingerprint, t.platformSupplierId),
+  ],
 );
 
-/** One outbound voice attempt per supplier notification. The terminal result decides whether the bidding
- * email is suppressed (`connected`) or requested as a fallback (`no_answer`, `busy`, `failed`, `skipped`). */
+/** A supplier's lightweight qualification response before they invest time in a full quotation. */
+export const supplierLineResponses = pgTable(
+  'supplier_line_responses',
+  {
+    id: id(),
+    tenantId: tenantId().references(() => tenants.id),
+    sourcingLineId: uuid('sourcing_line_id').notNull().references(() => sourcingLines.id),
+    platformSupplierId: uuid('platform_supplier_id').notNull().references(() => platformSuppliers.id),
+    status: text('status').notNull(), // can_supply | needs_clarification | declined
+    reason: text('reason'),
+    respondedAt: timestamp('responded_at', { withTimezone: true }).notNull().defaultNow(),
+    ...timestamps,
+  },
+  (t) => [
+    unique().on(t.sourcingLineId, t.platformSupplierId),
+    index('supplier_line_responses_line_idx').on(t.sourcingLineId),
+    index('supplier_line_responses_supplier_idx').on(t.platformSupplierId),
+  ],
+);
+
+/** Item-wise clarification thread. A thread is the (line, supplier) pair, preserving blind-bid privacy. */
+export const itemClarificationMessages = pgTable(
+  'item_clarification_messages',
+  {
+    id: id(),
+    tenantId: tenantId().references(() => tenants.id),
+    sourcingLineId: uuid('sourcing_line_id').notNull().references(() => sourcingLines.id),
+    platformSupplierId: uuid('platform_supplier_id').notNull().references(() => platformSuppliers.id),
+    senderType: text('sender_type').notNull(), // buyer | supplier
+    senderUserId: uuid('sender_user_id'),
+    senderLabel: text('sender_label').notNull(),
+    body: text('body').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('item_clarification_messages_thread_idx').on(t.sourcingLineId, t.platformSupplierId, t.createdAt),
+    index('item_clarification_messages_tenant_idx').on(t.tenantId, t.createdAt),
+  ],
+);
+
+/** One outbound voice notification per supplier match. Bidding always happens through the emailed invite;
+ * call outcomes are retained for buyer visibility and do not create or suppress bids. */
 export const supplierVoiceCalls = pgTable(
   'supplier_voice_calls',
   {
@@ -103,6 +148,30 @@ export const supplierVoiceCalls = pgTable(
   (t) => [index('supplier_voice_calls_line_idx').on(t.sourcingLineId), index('supplier_voice_calls_status_idx').on(t.tenantId, t.status)],
 );
 
+/** One row per channel attempt. The existing voice-call row remains the latest-state compatibility view. */
+export const supplierContactAttempts = pgTable('supplier_contact_attempts', {
+  id: id(),
+  tenantId: tenantId().references(() => tenants.id),
+  notificationId: uuid('notification_id').notNull().references(() => sourcingLineNotifications.id),
+  sourcingLineId: uuid('sourcing_line_id').notNull().references(() => sourcingLines.id),
+  platformSupplierId: uuid('platform_supplier_id').references(() => platformSuppliers.id),
+  voiceCallId: uuid('voice_call_id').references(() => supplierVoiceCalls.id),
+  channel: text('channel').notNull(), // voice | email | sms | whatsapp
+  direction: text('direction').notNull().default('outbound'),
+  purpose: text('purpose').notNull().default('rfq'),
+  status: text('status').notNull().default('queued'),
+  provider: text('provider'),
+  providerAttemptId: text('provider_attempt_id'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  ...timestamps,
+}, (t) => [
+  index('supplier_contact_attempts_line_idx').on(t.sourcingLineId),
+  index('supplier_contact_attempts_supplier_idx').on(t.platformSupplierId),
+  index('supplier_contact_attempts_voice_idx').on(t.voiceCallId),
+]);
+
 /**
  * A supplier's price quote on a line. Tenant-scoped and RLS-protected like the line it bids on -- the
  * buyer eventually needs to review these within their own tenant. The write path is a supplier acting with
@@ -121,12 +190,60 @@ export const bids = pgTable(
     unitPrice: numeric('unit_price', { precision: 14, scale: 2 }).notNull(),
     minimumOrderQty: numeric('minimum_order_qty', { precision: 14, scale: 3 }),
     leadTimeDays: integer('lead_time_days'),
+    currency: text('currency').notNull().default('INR'),
+    taxPercent: numeric('tax_percent', { precision: 6, scale: 3 }),
+    freightAmount: numeric('freight_amount', { precision: 14, scale: 2 }),
+    quoteValidityDate: date('quote_validity_date'),
     notes: text('notes'),
     status: text('status').notNull().default('submitted'), // 'submitted' | 'accepted' | 'rejected' | 'withdrawn'
     ...timestamps,
   },
   (t) => [unique().on(t.sourcingLineId, t.platformSupplierId)],
 );
+
+export const bidDrafts = pgTable('bid_drafts', {
+  id: id(),
+  tenantId: tenantId().references(() => tenants.id),
+  sourcingLineId: uuid('sourcing_line_id').notNull().references(() => sourcingLines.id),
+  notificationId: uuid('notification_id').notNull().references(() => sourcingLineNotifications.id),
+  platformSupplierId: uuid('platform_supplier_id').notNull().references(() => platformSuppliers.id),
+  voiceCallId: uuid('voice_call_id').notNull().references(() => supplierVoiceCalls.id).unique(),
+  unitPrice: numeric('unit_price', { precision: 14, scale: 2 }),
+  minimumOrderQty: numeric('minimum_order_qty', { precision: 14, scale: 3 }),
+  leadTimeDays: integer('lead_time_days'),
+  currency: text('currency').notNull().default('INR'),
+  taxPercent: numeric('tax_percent', { precision: 6, scale: 3 }),
+  freightAmount: numeric('freight_amount', { precision: 14, scale: 2 }),
+  quoteValidityDate: date('quote_validity_date'),
+  notes: text('notes'),
+  status: text('status').notNull().default('incomplete'), // incomplete | pending_confirmation | confirmed | expired
+  extractionConfidence: numeric('extraction_confidence', { precision: 5, scale: 4 }),
+  rawFields: jsonb('raw_fields').$type<Record<string, unknown>>(),
+  confirmationTokenHash: text('confirmation_token_hash').unique(),
+  confirmationExpiresAt: timestamp('confirmation_expires_at', { withTimezone: true }),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+  ...timestamps,
+}, (t) => [index('bid_drafts_line_idx').on(t.sourcingLineId), index('bid_drafts_status_idx').on(t.tenantId, t.status)]);
+
+export const bidRevisions = pgTable('bid_revisions', {
+  id: id(),
+  tenantId: tenantId().references(() => tenants.id),
+  bidId: uuid('bid_id').notNull().references(() => bids.id),
+  sourcingLineId: uuid('sourcing_line_id').notNull().references(() => sourcingLines.id),
+  platformSupplierId: uuid('platform_supplier_id').notNull().references(() => platformSuppliers.id),
+  revisionNumber: integer('revision_number').notNull(),
+  source: text('source').notNull().default('portal'),
+  sourceDraftId: uuid('source_draft_id').references(() => bidDrafts.id),
+  unitPrice: numeric('unit_price', { precision: 14, scale: 2 }).notNull(),
+  minimumOrderQty: numeric('minimum_order_qty', { precision: 14, scale: 3 }),
+  leadTimeDays: integer('lead_time_days'),
+  currency: text('currency').notNull().default('INR'),
+  taxPercent: numeric('tax_percent', { precision: 6, scale: 3 }),
+  freightAmount: numeric('freight_amount', { precision: 14, scale: 2 }),
+  quoteValidityDate: date('quote_validity_date'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [unique().on(t.bidId, t.revisionNumber), index('bid_revisions_line_idx').on(t.sourcingLineId)]);
 
 /** The minimal executable output of an award. Later procurement phases can expand this into headers and
  * lines; for the marketplace MVP each awarded sourcing line creates exactly one traceable draft PO. */
@@ -149,3 +266,22 @@ export const purchaseOrders = pgTable('purchase_orders', {
   createdBy: uuid('created_by'),
   ...timestamps,
 }, (t) => [unique().on(t.tenantId, t.poNumber)]);
+
+/** Append-only operational outcomes. purchase_orders.status is the current projection used by existing UI. */
+export const purchaseOrderOutcomes = pgTable('purchase_order_outcomes', {
+  id: id(),
+  tenantId: tenantId().references(() => tenants.id),
+  purchaseOrderId: uuid('purchase_order_id').notNull().references(() => purchaseOrders.id),
+  sourcingLineId: uuid('sourcing_line_id').notNull().references(() => sourcingLines.id),
+  platformSupplierId: uuid('platform_supplier_id').notNull().references(() => platformSuppliers.id),
+  type: text('type').notNull(), // acknowledged | dispatched | delivered | quality_accepted | quality_rejected | cancelled | disputed
+  promisedAt: timestamp('promised_at', { withTimezone: true }),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  quantity: numeric('quantity', { precision: 14, scale: 3 }),
+  rating: integer('rating'),
+  reasonCode: text('reason_code'),
+  notes: text('notes'),
+  evidence: jsonb('evidence').$type<Record<string, unknown>>(),
+  createdBy: uuid('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('purchase_order_outcomes_po_idx').on(t.purchaseOrderId), index('purchase_order_outcomes_supplier_idx').on(t.platformSupplierId)]);

@@ -33,3 +33,11 @@ resource "aws_route53_record" "auth" {
   ttl     = 60
   records = [aws_eip.app.public_ip]
 }
+
+resource "aws_route53_record" "operations" {
+  zone_id = data.aws_route53_zone.vprocly.zone_id
+  name    = "operations.${var.domain}"
+  type    = "A"
+  ttl     = 60
+  records = [aws_eip.app.public_ip]
+}

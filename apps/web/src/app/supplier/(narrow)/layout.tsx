@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { BrandLogo } from '@/components/brand';
 import { AuroraBackground } from '@/components/illustrations';
+import { PageTransition } from '@/components/page-transition';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function SupplierLayout({ children }: { children: React.ReactNode }) {
@@ -12,7 +13,7 @@ export default function SupplierLayout({ children }: { children: React.ReactNode
         <Link href="/" className="mx-auto">
           <BrandLogo animated markClassName="size-9" />
         </Link>
-        {children}
+        <PageTransition>{children}</PageTransition>
       </div>
     </main>
   );

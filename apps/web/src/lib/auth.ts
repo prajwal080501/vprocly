@@ -6,6 +6,7 @@ const issuer = process.env.OIDC_ISSUER!;
 // Server-side calls (discovery, token exchange, refresh) may need an internal URL; the browser and the
 // token's `iss` always use the public issuer.
 const internalIssuer = process.env.OIDC_INTERNAL_ISSUER ?? issuer;
+const cookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
 type AccountKind = 'buyer' | 'supplier';
 
@@ -24,26 +25,31 @@ function accountKind(accessToken: string | undefined): AccountKind | undefined {
   return undefined;
 }
 
-async function refresh(token: JWT): Promise<JWT> {
-  const res = await fetch(`${internalIssuer}/protocol/openid-connect/token`, {
-    method: 'POST',
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: process.env.OIDC_CLIENT_ID!,
-      client_secret: process.env.OIDC_CLIENT_SECRET!,
-      refresh_token: token.refreshToken!,
-    }),
-  });
-  if (!res.ok) return { ...token, error: 'RefreshFailed' };
-  const t = (await res.json()) as { access_token: string; refresh_token?: string; expires_in: number };
-  return {
-    ...token,
-    accessToken: t.access_token,
-    accountKind: accountKind(t.access_token),
-    refreshToken: t.refresh_token ?? token.refreshToken,
-    expiresAt: Math.floor(Date.now() / 1000) + t.expires_in,
-    error: undefined,
-  };
+export async function refreshSessionToken(token: JWT): Promise<JWT> {
+  if (!token.refreshToken) return { ...token, error: 'RefreshFailed' };
+  try {
+    const res = await fetch(`${internalIssuer}/protocol/openid-connect/token`, {
+      method: 'POST',
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: process.env.OIDC_CLIENT_ID!,
+        client_secret: process.env.OIDC_CLIENT_SECRET!,
+        refresh_token: token.refreshToken,
+      }),
+    });
+    if (!res.ok) return { ...token, error: 'RefreshFailed' };
+    const t = (await res.json()) as { access_token: string; refresh_token?: string; expires_in: number };
+    return {
+      ...token,
+      accessToken: t.access_token,
+      accountKind: accountKind(t.access_token),
+      refreshToken: t.refresh_token ?? token.refreshToken,
+      expiresAt: Math.floor(Date.now() / 1000) + t.expires_in,
+      error: undefined,
+    };
+  } catch {
+    return { ...token, error: 'RefreshFailed' };
+  }
 }
 
 export const authOptions: NextAuthOptions = {
@@ -56,8 +62,21 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: { strategy: 'jwt' },
+  cookies: cookieDomain ? {
+    sessionToken: {
+      name: '__Secure-next-auth.session-token',
+      options: { domain: cookieDomain, httpOnly: true, sameSite: 'lax', path: '/', secure: true },
+    },
+  } : undefined,
   pages: { signIn: '/signin' },
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith('/')) return `${baseUrl}${url}`;
+      const allowedOrigins = [baseUrl, process.env.OPERATIONS_URL]
+        .filter((value): value is string => Boolean(value))
+        .map((value) => new URL(value).origin);
+      return allowedOrigins.includes(new URL(url).origin) ? url : baseUrl;
+    },
     async jwt({ token, account }) {
       if (account) {
         return {
@@ -71,7 +90,7 @@ export const authOptions: NextAuthOptions = {
       if (token.expiresAt && Date.now() / 1000 < token.expiresAt - 30) {
         return token.accountKind ? token : { ...token, accountKind: accountKind(token.accessToken) };
       }
-      return refresh(token);
+      return refreshSessionToken(token);
     },
     // Tokens stay in the encrypted cookie; the browser session only gets identity and error state.
     async session({ session, token }) {

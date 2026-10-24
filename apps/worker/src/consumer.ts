@@ -3,6 +3,7 @@ import { inboxDedup, withTenant, type Database, type Tx } from '@vprocly/db';
 import { AckPolicy, DeliverPolicy, jetstreamManager, type JetStreamClient, type JsMsg } from '@nats-io/jetstream';
 import type { NatsConnection } from '@nats-io/transport-node';
 import { dlqSubject } from './streams.js';
+import { alertWorker, operationalFields } from './observability.js';
 
 export type ConsumerDefinition<P = void> = {
   /** Durable consumer name; also the idempotency key namespace. */
@@ -100,7 +101,19 @@ async function processMessage(js: JetStreamClient, db: Database, def: AnyConsume
     return;
   }
   try {
-    await handleEvent(db, def, parsed.data);
+    const startedAt = performance.now();
+    const outcome = await handleEvent(db, def, parsed.data);
+    console.log(JSON.stringify({
+      msg: 'consumer processed',
+      consumer: def.name,
+      eventId: parsed.data.id,
+      eventType: parsed.data.type,
+      requestId: parsed.data.correlationId ?? null,
+      tenantId: parsed.data.tenantId,
+      ...operationalFields(parsed.data.payload),
+      outcome,
+      durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+    }));
     msg.ack();
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
@@ -110,17 +123,20 @@ async function processMessage(js: JetStreamClient, db: Database, def: AnyConsume
     } catch (hookError) {
       console.error(JSON.stringify({ msg: 'consumer error hook failed', consumer: def.name, eventId: parsed.data.id, error: String(hookError) }));
     }
-    console.error(
-      JSON.stringify({
+    const fields = {
         msg: 'consumer failed',
         consumer: def.name,
         eventId: parsed.data.id,
         eventType: parsed.data.type,
+        requestId: parsed.data.correlationId ?? null,
+        tenantId: parsed.data.tenantId,
+        ...operationalFields(parsed.data.payload),
         attempt,
         maxDeliver,
         error: reason,
-      }),
-    );
+      };
+    console.error(JSON.stringify(fields));
+    void alertWorker(`consumer:${def.name}`, `Worker consumer ${def.name} failed`, fields);
     if (attempt >= maxDeliver) {
       await deadLetter(js, def, msg, reason);
     } else {

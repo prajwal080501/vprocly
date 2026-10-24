@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { parseEventPayload } from '@vprocly/contracts';
-import { enqueueEvent, platformSuppliers, sourcingLineNotifications, sourcingLines, supplierVoiceCalls, withTenant, type Database } from '@vprocly/db';
+import { enqueueEvent, platformSuppliers, sourcingLineNotifications, sourcingLines, supplierContactAttempts, supplierVoiceCalls, tenants, withTenant, type Database } from '@vprocly/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { ConsumerDefinition } from '../consumer.js';
 import type { CampaignClient } from '../voice/sarvam-campaign-client.js';
@@ -18,8 +18,8 @@ type Prepared = { outcomes: Outcome[] };
  * Routes every newly matched supplier through voice first when a number is available. Suppliers to be
  * called are streamed into one long-lived Sarvam campaign (see sarvam-campaign-client.ts) rather than
  * called one-by-one via Instant Outbound -- Sarvam's own scheduler places the actual call, respecting the
- * campaign's business-hours/rate/retry config, and the completion webhook (voice-outreach.service.ts)
- * updates the row and falls back to email on failure. Creates one durable voice row per notification, so
+ * campaign's business-hours/rate/retry config. Every supplier also receives the bidding email; calls are
+ * notifications only and never collect or create bids. Creates one durable voice row per notification, so
  * event redelivery cannot schedule the same supplier twice.
  */
 export function supplierOutreachRouter(
@@ -37,8 +37,9 @@ export function supplierOutreachRouter(
       const sourcingLineId = String(event.payload.sourcingLineId);
       const { line, pending } = await withTenant(deps.db, { tenantId: event.tenantId }, async (tx) => {
         const [line] = await tx
-          .select({ description: sourcingLines.description, qty: sourcingLines.qty, uom: sourcingLines.uom, deliveryCity: sourcingLines.deliveryCity, deliveryState: sourcingLines.deliveryState })
+          .select({ description: sourcingLines.description, qty: sourcingLines.qty, uom: sourcingLines.uom, deliveryCity: sourcingLines.deliveryCity, deliveryState: sourcingLines.deliveryState, buyerCompanyName: tenants.name })
           .from(sourcingLines)
+          .innerJoin(tenants, eq(tenants.id, sourcingLines.tenantId))
           .where(eq(sourcingLines.id, sourcingLineId));
         const pending = await tx
           .select({
@@ -91,6 +92,7 @@ export function supplierOutreachRouter(
           // voice-outreach.service.ts's matching parse of this exact format.
           userIdentifier: `${event.tenantId}:${voiceCallId}`,
           appVariables: {
+            buyer_company_name: line.buyerCompanyName,
             supplier_name: supplier.supplierName ?? '',
             item_description: supplierCallItemDescription(
               line.description,
@@ -110,7 +112,7 @@ export function supplierOutreachRouter(
     async handler(tx, event, { outcomes }) {
       const sourcingLineId = String(event.payload.sourcingLineId);
 
-      const emailFallback = async (notificationId: string, reason: 'no_phone' | 'voice_disabled') => {
+      const requestBiddingEmail = async (notificationId: string, reason: 'call_notification' | 'no_phone' | 'voice_disabled') => {
         const payload = parseEventPayload('sourcing.supplier_email_requested', 1, { notificationId, sourcingLineId, reason });
         await enqueueEvent(tx, event.tenantId, {
           eventType: 'sourcing.supplier_email_requested',
@@ -141,7 +143,7 @@ export function supplierOutreachRouter(
           continue;
         }
         if (outcome.kind === 'no_phone') {
-          await emailFallback(outcome.notificationId, 'no_phone');
+          await requestBiddingEmail(outcome.notificationId, 'no_phone');
           continue;
         }
         if (outcome.kind === 'capture_skip') {
@@ -160,12 +162,25 @@ export function supplierOutreachRouter(
             .onConflictDoNothing()
             .returning({ id: supplierVoiceCalls.id });
           if (!voiceCall) continue;
-          await emailFallback(outcome.notificationId, 'voice_disabled');
+          await tx.insert(supplierContactAttempts).values({
+            tenantId: event.tenantId,
+            notificationId: outcome.notificationId,
+            sourcingLineId,
+            platformSupplierId: outcome.platformSupplierId,
+            voiceCallId: voiceCall.id,
+            channel: 'voice',
+            purpose: 'rfq',
+            provider: 'sarvam',
+            status: 'skipped',
+            metadata: { reason: skipReason },
+            completedAt: new Date(),
+          });
+          await requestBiddingEmail(outcome.notificationId, 'voice_disabled');
           continue;
         }
         // cohort_added -- already streamed into the campaign in prepare(); just record the row. Sarvam's
         // completion webhook (voice-outreach.service.ts) updates status and falls back to email on failure.
-        await tx
+        const [voiceCall] = await tx
           .insert(supplierVoiceCalls)
           .values({
             id: outcome.voiceCallId,
@@ -176,7 +191,22 @@ export function supplierOutreachRouter(
             phone: outcome.phone,
             status: 'queued',
           })
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning({ id: supplierVoiceCalls.id });
+        if (voiceCall) {
+          await tx.insert(supplierContactAttempts).values({
+            tenantId: event.tenantId,
+            notificationId: outcome.notificationId,
+            sourcingLineId,
+            platformSupplierId: outcome.platformSupplierId,
+            voiceCallId: voiceCall.id,
+            channel: 'voice',
+            purpose: 'rfq',
+            provider: 'sarvam',
+            status: 'queued',
+          });
+          await requestBiddingEmail(outcome.notificationId, 'call_notification');
+        }
       }
     },
   };

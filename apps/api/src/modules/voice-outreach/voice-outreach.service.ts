@@ -1,8 +1,8 @@
 import { timingSafeEqual } from 'node:crypto';
 import { BadRequestException, Inject, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { parseEventPayload } from '@vprocly/contracts';
-import { enqueueEvent, supplierVoiceCalls, withTenant, type Database } from '@vprocly/db';
-import { eq } from 'drizzle-orm';
+import { enqueueEvent, supplierContactAttempts, supplierVoiceCalls, withTenant, type Database } from '@vprocly/db';
+import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { APP_CONFIG, type AppConfig } from '../../config.js';
 import { DATABASE } from '../../platform/database.module.js';
@@ -69,6 +69,43 @@ export class VoiceOutreachService {
         ...(payload.output_agent_variables ?? {}),
       };
 
+      const [latestAttempt] = await tx
+        .select()
+        .from(supplierContactAttempts)
+        .where(eq(supplierContactAttempts.voiceCallId, call.id))
+        .orderBy(desc(supplierContactAttempts.createdAt))
+        .limit(1);
+      if (latestAttempt) {
+        await tx
+          .update(supplierContactAttempts)
+          .set({
+            status: payload.status,
+            providerAttemptId: payload.attempt_id,
+            completedAt: new Date(),
+            metadata: { duration: payload.duration, failureReason: payload.failure_reason, interactionId: payload.interaction_id },
+            updatedAt: new Date(),
+          })
+          .where(eq(supplierContactAttempts.id, latestAttempt.id));
+      } else {
+        const [created] = await tx
+          .insert(supplierContactAttempts)
+          .values({
+            tenantId: identity.tenantId,
+            notificationId: call.notificationId,
+            sourcingLineId: call.sourcingLineId,
+            platformSupplierId: call.platformSupplierId,
+            voiceCallId: call.id,
+            channel: 'voice',
+            purpose: 'rfq',
+            provider: call.provider,
+            providerAttemptId: payload.attempt_id,
+            status: payload.status,
+            completedAt: new Date(),
+          })
+          .returning({ id: supplierContactAttempts.id });
+        void created;
+      }
+
       await tx
         .update(supplierVoiceCalls)
         .set({
@@ -84,8 +121,8 @@ export class VoiceOutreachService {
         })
         .where(eq(supplierVoiceCalls.id, call.id));
 
-      if (!duplicate && payload.status !== 'connected') {
-        const reason = payload.status === 'failed' ? 'call_failed' : payload.status;
+      if (!duplicate) {
+        const reason = payload.status === 'connected' ? 'call_notification' : payload.status === 'failed' ? 'call_failed' : payload.status;
         const eventPayload = parseEventPayload('sourcing.supplier_email_requested', 1, {
           notificationId: call.notificationId,
           sourcingLineId: call.sourcingLineId,
@@ -99,6 +136,7 @@ export class VoiceOutreachService {
           payload: eventPayload,
         });
       }
+
       return { accepted: true, duplicate };
     });
   }

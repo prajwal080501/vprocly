@@ -45,20 +45,30 @@ config:
   smtpNoreplyPort: 587
   smtpNoreplyFrom: "vProcly <noreply@vprocly.com>"
   emailDeliveryMode: live
+  # Estimated INR micros from the 2026-10-24 list prices. Token rates are per 1M tokens; the other
+  # rates are per billable event. Free allowances are excluded so this reports marginal cost.
+  geminiModel: gemini-3.8-flash
+  supplierResearchMaxCandidates: 5
+  geminiInputCostMicrosPerMillion: "71301825"
+  geminiOutputCostMicrosPerMillion: "356509125"
+  geminiSearchCostMicros: "1330967"
+  googlePlaceDetailsCostMicros: "570415"
   # Keep capture until the Sarvam app, telephony connection, public webhook, and consent/compliance review
   # are ready. Live credentials belong in existingSecret, never this values file.
   voiceDeliveryMode: capture
   sarvamOrgId: ""
   sarvamWorkspaceId: ""
   sarvamAppId: ""
-  sarvamAppVersion: 1
+  sarvamAppVersion: 4
+  sarvamCampaignName: vprocly-supplier-notification-v4
   sarvamConnectionId: ""
   sarvamAgentPhoneNumber: ""
 
 # Secret must provide: DATABASE_URL (app role), DATABASE_ADMIN_URL (migrations/owner role), S3_ACCESS_KEY,
 # S3_SECRET_KEY, NEXTAUTH_SECRET, OIDC_CLIENT_SECRET, KEYCLOAK_ADMIN_CLIENT_SECRET, SMTP_USER, SMTP_PASS,
-# NOREPLY_SMTP_USER, NOREPLY_SMTP_PASS. Live voice delivery also requires SARVAM_API_KEY and
-# SARVAM_WEBHOOK_SECRET. Manage it with External Secrets / Vault.
+# NOREPLY_SMTP_USER, NOREPLY_SMTP_PASS. Supplier research requires GEMINI_API_KEY and
+# GOOGLE_PLACES_API_KEY. Live voice delivery also requires SARVAM_API_KEY and SARVAM_WEBHOOK_SECRET.
+# Manage them with External Secrets / Vault.
 existingSecret: vprocly-secrets
 
 migrations:

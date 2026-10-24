@@ -2,13 +2,15 @@
 
 import { signIn, signOut } from 'next-auth/react';
 import { LogInIcon, LogOutIcon } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 export function SignInButton({ callbackUrl = '/', label = 'Sign in with your organisation' }: { callbackUrl?: string; label?: string }) {
+  const [pending, setPending] = useState(false);
   return (
-    <Button onClick={() => signIn('keycloak', { callbackUrl })} className="w-full" size="lg">
+    <Button onClick={() => { setPending(true); void signIn('keycloak', { callbackUrl }); }} disabled={pending} className="w-full" size="lg">
       <LogInIcon data-icon="inline-start" />
-      {label}
+      {pending ? 'Opening secure sign in…' : label}
     </Button>
   );
 }

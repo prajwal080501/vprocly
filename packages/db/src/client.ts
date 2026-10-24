@@ -4,6 +4,8 @@ import pg from 'pg';
 import * as schema from './schema/index.js';
 
 export type Pool = pg.Pool;
+export type PoolClient = pg.PoolClient;
+export type PgNotification = pg.Notification;
 export type Database = NodePgDatabase<typeof schema>;
 export type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 

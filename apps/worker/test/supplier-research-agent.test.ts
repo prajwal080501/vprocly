@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { EventEnvelope } from '@vprocly/contracts';
+import { supplierResearchFingerprint, type EventEnvelope } from '@vprocly/contracts';
 import {
   categories,
   createDatabase,
@@ -10,6 +10,7 @@ import {
   sourcingResearchJobs,
   sourcingRequests,
   supplierCategories,
+  supplierItemClaims,
   supplierResearchRuns,
   withTenant,
 } from '@vprocly/db';
@@ -42,6 +43,11 @@ function fakeCandidate(overrides: Partial<SupplierCandidate> = {}): SupplierCand
     placeId: 'fake-place-id',
     sourceUrls: [],
     searchQuery: 'fake',
+    itemMatchScore: 0.9,
+    evidenceScore: 0.8,
+    matchedIdentifiers: ['RT-001'],
+    matchReasons: ['Exact test item code'],
+    researchIteration: 1,
     ...overrides,
   };
 }
@@ -51,7 +57,23 @@ function researchClientReturning(candidates: SupplierCandidate[]): SupplierResea
     calls: 0,
     async findSuppliers() {
       client.calls++;
-      return candidates;
+      return {
+        candidates,
+        metrics: {
+          queryCount: 1,
+          geminiCalls: 1,
+          geminiInputTokens: 100,
+          geminiOutputTokens: 50,
+          groundingQueries: 1,
+          placesCalls: candidates.length * 2,
+          placesIdSearches: candidates.length,
+          placesDetailCalls: candidates.length,
+          duplicatesRemoved: 0,
+          durationMs: 25,
+          estimatedCostMicros: 100,
+          stopReason: candidates.length ? 'target_reached' as const : 'plan_exhausted' as const,
+        },
+      };
     },
   };
   return client;
@@ -126,12 +148,21 @@ describe('supplier research agent', () => {
     expect(supplier!.gst).toBeNull();
     expect(supplier!.discoveryMetadata).toMatchObject({ placeId: 'fake-place-id', sourcingLineId: lineId });
 
+    const fingerprint = supplierResearchFingerprint({ itemCode: 'RT-001', description: 'Unmatched research test item' });
+    const [claim] = await db.select().from(supplierItemClaims).where(and(
+      eq(supplierItemClaims.platformSupplierId, supplier!.id),
+      eq(supplierItemClaims.itemFingerprint, fingerprint),
+    ));
+    expect(claim).toMatchObject({ matchScore: '0.9000', evidenceScore: '0.8000' });
+
     const [cat] = await db.select().from(supplierCategories).where(and(eq(supplierCategories.platformSupplierId, supplier!.id), eq(supplierCategories.categoryId, categoryId)));
     expect(cat).toBeDefined();
 
     const [run] = await db.select().from(supplierResearchRuns).where(eq(supplierResearchRuns.categoryId, categoryId));
     expect(run).toBeDefined();
     expect(run!.candidatesFound).toBe(1);
+    expect(run!.itemFingerprint).toBe(fingerprint);
+    expect(run).toMatchObject({ queryCount: 1, geminiCalls: 1, placesCalls: 2, placesIdSearches: 1, placesDetailCalls: 1, estimatedCostMicros: 100 });
 
     const [job] = await withTenant(db, { tenantId: ACME }, (tx) =>
       tx.select().from(sourcingResearchJobs).where(eq(sourcingResearchJobs.sourcingLineId, lineId)),
@@ -145,8 +176,9 @@ describe('supplier research agent', () => {
     expect(outboxRow!.payload).toMatchObject({ invitedNewCount: 1 });
   });
 
-  it('skips research and just re-notifies once a prospect already covers the category (cost guard against redelivery/races)', async () => {
+  it('skips research and reuses fresh claims for the exact item (cost guard against redelivery/races)', async () => {
     const categoryId = await seedUnmatchedCategory();
+    const fingerprint = supplierResearchFingerprint({ itemCode: 'RT-001', description: 'Unmatched research test item' });
     for (let i = 0; i < 5; i++) {
       const email = `existing-${i}-${randomUUID().slice(0, 8)}@example.com`;
       const [existingProspect] = await db
@@ -154,6 +186,14 @@ describe('supplier research agent', () => {
         .values({ name: `Existing Prospect Co ${i}`, gst: null, email, city: 'TestCity', state: 'TestState', status: 'prospect' })
         .returning();
       await db.insert(supplierCategories).values({ platformSupplierId: existingProspect!.id, categoryId });
+      await db.insert(supplierItemClaims).values({
+        platformSupplierId: existingProspect!.id,
+        itemFingerprint: fingerprint,
+        description: 'Unmatched research test item',
+        matchScore: '0.9000',
+        evidenceScore: '0.8000',
+        expiresAt: new Date(Date.now() + 86_400_000),
+      });
     }
 
     const lineId = await seedUnmatchedLine(categoryId);
@@ -190,7 +230,8 @@ describe('supplier research agent', () => {
     expect(await handleEvent(db, consumer, unmatchedEvent(lineId, categoryId))).toBe('processed');
 
     const runs = await db.select().from(supplierResearchRuns).where(eq(supplierResearchRuns.categoryId, categoryId));
-    expect(runs).toHaveLength(0);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ candidatesFound: 0, queryCount: 1, geminiCalls: 1 });
 
     const [outboxRow] = await withTenant(db, { tenantId: ACME }, (tx) =>
       tx.select().from(outbox).where(and(eq(outbox.eventType, 'sourcing.sourcing_line_matched'), eq(outbox.aggregateId, lineId))),

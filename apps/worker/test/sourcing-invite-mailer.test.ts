@@ -71,6 +71,30 @@ async function lastMailpitMessageTo(email: string): Promise<{ Text: string; HTML
 }
 
 describe('sourcing invite mailer', () => {
+  it('activates the invite token before SMTP can deliver the email', async () => {
+    const email = `mailer-order-${randomUUID().slice(0, 8)}@example.com`;
+    const { lineId, notificationId } = await seedLineWithPendingNotification(email);
+    const verifyingTransport = {
+      async sendMail(message: { text?: string }) {
+        const token = message.text?.match(/supplier\/invite\/(\S+)/)?.[1];
+        expect(token).toBeDefined();
+        const [row] = await withTenant(db, { tenantId: ACME }, (tx) =>
+          tx.select().from(sourcingLineNotifications).where(eq(sourcingLineNotifications.id, notificationId)),
+        );
+        expect(row!.tokenHash).toBe(hashInviteToken(token!));
+        expect(row!.expiresAt!.getTime()).toBeGreaterThan(Date.now());
+        expect(row!.sentAt).toBeNull();
+        return {};
+      },
+    } as unknown as typeof transport;
+    const orderingConsumer = sourcingInviteMailer({
+      ...deps,
+      mailers: { ...mailers, rfq: verifyingTransport },
+    });
+
+    await expect(handleEvent(db, orderingConsumer, emailEvent(lineId, notificationId))).resolves.toBe('processed');
+  });
+
   it('sends the invite email with a working token, and never mentions the buyer/tenant', async () => {
     const email = `mailer-${randomUUID().slice(0, 8)}@example.com`;
     const { lineId, notificationId } = await seedLineWithPendingNotification(email);

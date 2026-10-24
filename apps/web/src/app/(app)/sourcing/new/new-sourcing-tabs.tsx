@@ -2,11 +2,11 @@
 
 import { ClipboardListIcon, FileSpreadsheetIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Category } from '@/lib/types';
+import type { Category, CustomRequestOption } from '@/lib/types';
 import { BomUploadForm } from './bom-upload-form';
 import { ManualEntryForm } from './manual-entry-form';
 
-export function NewSourcingTabs({ categories }: { categories: Category[] }) {
+export function NewSourcingTabs({ categories, customRequests = [] }: { categories: Category[]; customRequests?: CustomRequestOption[] }) {
   return (
     <Tabs defaultValue="manual" className="gap-5">
       <TabsList className="mt-5 w-full sm:w-fit">
@@ -20,7 +20,7 @@ export function NewSourcingTabs({ categories }: { categories: Category[] }) {
         </TabsTrigger>
       </TabsList>
       <TabsContent value="manual">
-        <ManualEntryForm categories={categories} />
+        <ManualEntryForm categories={categories} customRequests={customRequests} />
       </TabsContent>
       <TabsContent value="bom">
         <BomUploadForm />

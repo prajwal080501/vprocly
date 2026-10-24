@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import type { OpenLineForSupplier } from '@/lib/types';
 import { placeBid, type PlaceBidState } from './actions';
 
-export function BidForm({ line }: { line: OpenLineForSupplier }) {
+export function BidForm({ line, compact = false }: { line: OpenLineForSupplier; compact?: boolean }) {
   const action = placeBid.bind(null, line.sourcingLineId);
   const [state, formAction, pending] = useActionState<PlaceBidState, FormData>(action, {});
   const [open, setOpen] = useState(false);
@@ -20,7 +20,7 @@ export function BidForm({ line }: { line: OpenLineForSupplier }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button />}>
+      <DialogTrigger render={<Button size={compact ? 'sm' : 'default'} />}>
         <GavelIcon data-icon="inline-start" />
         {line.alreadyBid ? 'Update bid' : 'Place bid'}
       </DialogTrigger>

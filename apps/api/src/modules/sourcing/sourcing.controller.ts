@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { RequestContext } from '../../platform/request-context.js';
 import { ZodPipe } from '../../platform/zod.pipe.js';
 import { Ctx, Public, Roles } from '../identity-tenancy/index.js';
-import { CreateManualRequest, ImportBomRequest, InviteToLineInput, SourcingService } from './sourcing.service.js';
+import { BuyerClarificationInput, CreateManualRequest, ImportBomRequest, InviteToLineInput, RecordPurchaseOrderOutcome, SourcingService } from './sourcing.service.js';
 
 @ApiTags('sourcing')
 @ApiBearerAuth()
@@ -59,6 +59,18 @@ export class SourcingController {
     return this.sourcing.acceptBid(ctx, requestId, lineId, bidId);
   }
 
+  @Post(':requestId/lines/:lineId/purchase-orders/:purchaseOrderId/outcomes')
+  @Roles('buyer', 'tenant_admin')
+  recordOutcome(
+    @Ctx() ctx: RequestContext,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+    @Param('purchaseOrderId', ParseUUIDPipe) purchaseOrderId: string,
+    @Body(new ZodPipe(RecordPurchaseOrderOutcome)) body: RecordPurchaseOrderOutcome,
+  ) {
+    return this.sourcing.recordOutcome(ctx, requestId, lineId, purchaseOrderId, body);
+  }
+
   @Post(':requestId/lines/:lineId/invite')
   @Roles('buyer', 'requester', 'tenant_admin')
   inviteToLine(
@@ -68,6 +80,17 @@ export class SourcingController {
     @Body(new ZodPipe(InviteToLineInput)) body: InviteToLineInput,
   ) {
     return this.sourcing.inviteToLine(ctx, requestId, lineId, body.emails);
+  }
+
+  @Post(':requestId/lines/:lineId/clarifications')
+  @Roles('buyer', 'requester', 'tenant_admin')
+  postClarification(
+    @Ctx() ctx: RequestContext,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+    @Body(new ZodPipe(BuyerClarificationInput)) body: BuyerClarificationInput,
+  ) {
+    return this.sourcing.postClarification(ctx, requestId, lineId, body);
   }
 
   @Post(':requestId/lines/:lineId/research/retry')
